@@ -10,7 +10,7 @@ export const Card = React.forwardRef<
     className={cn(
       // Container: surface-elevated, radius-md (10px), 1px border-default, no shadow (Section 8)
       "bg-[var(--color-surface-elevated)] text-[var(--color-text-primary)] rounded-md border border-[var(--color-border-default)] p-5 md:p-6 transition-colors duration-100 hover:border-[var(--color-border-strong)]",
-      className
+      className,
     )}
     {...props}
   />
@@ -37,7 +37,7 @@ export const CardTitle = React.forwardRef<
     ref={ref}
     className={cn(
       "font-display text-[22px] font-semibold leading-tight text-[var(--color-text-primary)]",
-      className
+      className,
     )}
     {...props}
   />
