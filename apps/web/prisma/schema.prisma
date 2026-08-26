@@ -1,0 +1,114 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  OWNER
+  TRAINER
+  MEMBER
+}
+
+enum FeeStatus {
+  PAID
+  PENDING
+  OVERDUE
+}
+
+model Gym {
+  id        String   @id @default(cuid())
+  name      String
+  location  String
+  createdAt DateTime @default(now())
+
+  users      User[]
+  attendance Attendance[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(MEMBER)
+  gymId     String?
+  gym       Gym?     @relation(fields: [gymId], references: [id])
+  createdAt DateTime @default(now())
+
+  // Relationships
+  assignedClients  User[]   @relation("TrainerClients")
+  assignedTrainer  User?    @relation("TrainerClients", fields: [trainerId], references: [id])
+  trainerId        String?
+
+  workoutPlans     WorkoutPlan[]
+  workoutSessions  WorkoutSession[]
+  attendanceRecords Attendance[]
+  feeStatus        FeeStatus @default(PAID)
+}
+
+model WorkoutPlan {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isPublished Boolean  @default(false)
+  version     String   @default("1.0")
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  days        PlanDay[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PlanDay {
+  id          String         @id @default(cuid())
+  name        String
+  targetDay   String
+  planId      String
+  plan        WorkoutPlan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  exercises   PlanExercise[]
+}
+
+model PlanExercise {
+  id           String  @id @default(cuid())
+  name         String
+  category     String
+  sets         Int
+  targetReps   Int
+  restSeconds  Int
+  dayId        String
+  day          PlanDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+}
+
+model WorkoutSession {
+  id         String     @id @default(cuid())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id])
+  planName   String
+  duration   Int?       // in minutes
+  completedAt DateTime  @default(now())
+  loggedSets LoggedSet[]
+}
+
+model LoggedSet {
+  id          String         @id @default(cuid())
+  sessionId   String
+  session     WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseName String
+  setNumber   Int
+  weight      Float
+  reps        Int
+  completed   Boolean        @default(true)
+}
+
+model Attendance {
+  id          String   @id @default(cuid())
+  gymId       String
+  gym         Gym      @relation(fields: [gymId], references: [id])
+  trainerId   String
+  trainer     User     @relation(fields: [trainerId], references: [id])
+  checkInTime DateTime @default(now())
+  present     Boolean  @default(true)
+}
