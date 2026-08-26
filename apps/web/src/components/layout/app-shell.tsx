@@ -2,6 +2,7 @@ import * as React from "react";
 import { Sidebar } from "./sidebar";
 import { BottomNav } from "./bottom-nav";
 import { OfflineBanner } from "./offline-banner";
+import { FloatingRestTimer } from "./floating-rest-timer";
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -15,6 +16,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({
           {children}
         </div>
       </main>
+      <FloatingRestTimer />
       <BottomNav />
     </div>
   );
