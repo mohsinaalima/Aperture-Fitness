@@ -6,10 +6,8 @@ import {
   ArrowLeft,
   GripVertical,
   Plus,
-  Copy,
   Trash2,
   Clock,
-  History,
   Save,
   CheckCircle2,
   X,
@@ -19,229 +17,92 @@ import {
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-
-// Data Models
-interface ConfiguredSet {
-  id: number;
-  sets: number;
-  targetReps: number;
-  restSeconds: number;
-}
-
-interface BuilderExercise {
-  id: string;
-  name: string;
-  category: string;
-  config: ConfiguredSet;
-}
-
-interface BuilderDay {
-  id: string;
-  name: string;
-  targetDay: string;
-  exercises: BuilderExercise[];
-}
-
-interface PlanSnapshot {
-  id: string;
-  name: string;
-  timestamp: string;
-  days: BuilderDay[];
-}
-
-// Exercise Library Catalog for Modal Picker
-const EXERCISE_CATALOG = [
-  { name: "Barbell Bench Press", category: "Chest" },
-  { name: "Incline Dumbbell Press", category: "Upper Chest" },
-  { name: "Barbell Back Squat", category: "Quads / Glutes" },
-  { name: "Romanian Deadlift", category: "Posterior Chain" },
-  { name: "Overhead Barbell Press", category: "Shoulders" },
-  { name: "Lat Pulldown", category: "Back / Lats" },
-  { name: "Seated Cable Row", category: "Mid-Back" },
-  { name: "Barbell Curl", category: "Biceps" },
-];
-
-const INITIAL_DAYS: BuilderDay[] = [
-  {
-    id: "day-1",
-    name: "Day 1: Upper Body Power",
-    targetDay: "Mon",
-    exercises: [
-      {
-        id: "ex-1",
-        name: "Barbell Bench Press",
-        category: "Chest",
-        config: { id: 1, sets: 4, targetReps: 6, restSeconds: 180 },
-      },
-    ],
-  },
-  {
-    id: "day-2",
-    name: "Day 2: Lower Body Power",
-    targetDay: "Wed",
-    exercises: [
-      {
-        id: "ex-2",
-        name: "Barbell Back Squat",
-        category: "Quads / Glutes",
-        config: { id: 2, sets: 4, targetReps: 5, restSeconds: 240 },
-      },
-    ],
-  },
-];
+import { useAppStore, CustomExercise } from "@/store/app-store";
 
 export default function WorkoutBuilderPage() {
-  const [days, setDays] = useState<BuilderDay[]>(INITIAL_DAYS);
-  const [selectedDayId, setSelectedDayId] = useState<string>("day-1");
-  const [snapshots, setSnapshots] = useState<PlanSnapshot[]>([
-    {
-      id: "snap-1",
-      name: "Week 1 Baseline",
-      timestamp: "Yesterday 14:30",
-      days: INITIAL_DAYS,
-    },
-  ]);
+  const {
+    plans,
+    customExercises,
+    createCustomPlan,
+    addDayToPlan,
+    addExerciseToDay,
+    updateSetInPlan,
+    setActivePlan,
+    deletePlan,
+    addCustomExercise,
+  } = useAppStore();
 
-  // Modal & UI States
+  const [selectedPlanId, setSelectedPlanId] = useState<string>(
+    plans[0]?.id || "",
+  );
+  const [selectedDayId, setSelectedDayId] = useState<string>("");
   const [isExerciseModalOpen, setIsExerciseModalOpen] = useState(false);
-  const [isSnapshotModalOpen, setIsSnapshotModalOpen] = useState(false);
+  const [isNewPlanModalOpen, setIsNewPlanModalOpen] = useState(false);
+  const [isCustomExModalOpen, setIsCustomExModalOpen] = useState(false);
+
+  // New Form Inputs
+  const [newPlanName, setNewPlanName] = useState("");
+  const [newPlanDesc, setNewPlanDesc] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [snapshotName, setSnapshotName] = useState("");
-  const [isPublished, setIsPublished] = useState(false);
-  const [publishMessage, setPublishMessage] = useState<string | null>(null);
+  const [customExName, setCustomExName] = useState("");
+  const [customExCategory, setCustomExCategory] = useState("Chest");
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  const activeDay = days.find((d) => d.id === selectedDayId) || days[0];
+  const activePlan = plans.find((p) => p.id === selectedPlanId) || plans[0];
+  const activeDay =
+    activePlan?.days.find((d) => d.id === selectedDayId) || activePlan?.days[0];
 
-  // 1. Add New Day Logic
+  const handleCreatePlan = () => {
+    if (!newPlanName.trim()) return;
+    const newId = createCustomPlan(newPlanName, newPlanDesc);
+    setSelectedPlanId(newId);
+    setNewPlanName("");
+    setNewPlanDesc("");
+    setIsNewPlanModalOpen(false);
+    showToast("Custom routine created! Add your first day below.");
+  };
+
   const handleAddDay = () => {
-    const nextDayNum = days.length + 1;
-    const newDayId = `day-${Date.now()}`;
-    const newDay: BuilderDay = {
-      id: newDayId,
-      name: `Day ${nextDayNum}: Accessory Session`,
-      targetDay: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][
-        (days.length * 2) % 7
-      ],
-      exercises: [],
-    };
-    setDays([...days, newDay]);
-    setSelectedDayId(newDayId);
+    if (!activePlan) return;
+    const dayNum = activePlan.days.length + 1;
+    const targetDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const targetDay = targetDays[(activePlan.days.length * 2) % 7];
+    addDayToPlan(activePlan.id, `Day ${dayNum}: Custom Split`, targetDay);
+    showToast(`Day ${dayNum} added to ${activePlan.name}`);
   };
 
-  // 2. Add Exercise from Modal
-  const handleSelectExercise = (exerciseName: string, category: string) => {
-    if (!activeDay) return;
-    const newExercise: BuilderExercise = {
-      id: `ex-${Date.now()}`,
-      name: exerciseName,
-      category,
-      config: { id: Date.now(), sets: 3, targetReps: 10, restSeconds: 120 },
-    };
-
-    setDays(
-      days.map((d) =>
-        d.id === activeDay.id
-          ? { ...d, exercises: [...d.exercises, newExercise] }
-          : d,
-      ),
-    );
+  const handleSelectExercise = (ex: CustomExercise) => {
+    if (!activePlan || !activeDay) return;
+    addExerciseToDay(activePlan.id, activeDay.id, ex);
     setIsExerciseModalOpen(false);
-    setSearchQuery("");
+    showToast(`Added ${ex.name} to ${activeDay.name}`);
   };
 
-  // 3. Duplicate Exercise
-  const handleDuplicateExercise = (exerciseId: string) => {
-    if (!activeDay) return;
-    const targetEx = activeDay.exercises.find((e) => e.id === exerciseId);
-    if (!targetEx) return;
-
-    const duplicated: BuilderExercise = {
-      ...targetEx,
-      id: `ex-${Date.now()}`,
-      name: `Copy of ${targetEx.name}`,
-    };
-
-    setDays(
-      days.map((d) =>
-        d.id === activeDay.id
-          ? { ...d, exercises: [...d.exercises, duplicated] }
-          : d,
-      ),
+  const handleCreateCustomExercise = () => {
+    if (!customExName.trim()) return;
+    addCustomExercise(
+      customExName,
+      customExCategory,
+      "Custom",
+      "Target Muscle",
     );
+    setCustomExName("");
+    setIsCustomExModalOpen(false);
+    showToast("Custom movement added to exercise library!");
   };
 
-  // 4. Remove Exercise
-  const handleRemoveExercise = (exerciseId: string) => {
-    if (!activeDay) return;
-    setDays(
-      days.map((d) =>
-        d.id === activeDay.id
-          ? { ...d, exercises: d.exercises.filter((e) => e.id !== exerciseId) }
-          : d,
-      ),
-    );
-  };
-
-  // 5. Update Inline Stepper Configuration
-  const handleUpdateConfig = (
-    exerciseId: string,
-    field: keyof ConfiguredSet,
-    delta: number,
-  ) => {
-    setDays(
-      days.map((d) => {
-        if (d.id !== activeDay.id) return d;
-        return {
-          ...d,
-          exercises: d.exercises.map((e) => {
-            if (e.id !== exerciseId) return e;
-            const currentVal = e.config[field];
-            const newVal = Math.max(1, currentVal + delta);
-            return {
-              ...e,
-              config: { ...e.config, [field]: newVal },
-            };
-          }),
-        };
-      }),
-    );
-  };
-
-  // 6. Save Snapshot Logic
-  const handleCreateSnapshot = () => {
-    if (!snapshotName.trim()) return;
-    const newSnap: PlanSnapshot = {
-      id: `snap-${Date.now()}`,
-      name: snapshotName.trim(),
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      days: JSON.parse(JSON.stringify(days)),
-    };
-    setSnapshots([newSnap, ...snapshots]);
-    setSnapshotName("");
-    setIsSnapshotModalOpen(false);
-  };
-
-  // 7. Restore Snapshot
-  const handleRestoreSnapshot = (snap: PlanSnapshot) => {
-    setDays(JSON.parse(JSON.stringify(snap.days)));
-    if (snap.days.length > 0) {
-      setSelectedDayId(snap.days[0].id);
-    }
-  };
-
-  // 8. Publish Plan Logic
   const handlePublishPlan = () => {
-    setIsPublished(true);
-    setPublishMessage(
-      "Workout Plan successfully published and assigned to your active training log!",
-    );
-    setTimeout(() => setPublishMessage(null), 4000);
+    if (!activePlan) return;
+    setActivePlan(activePlan.id);
+    showToast(`${activePlan.name} is now set as your active gym program!`);
   };
 
-  const filteredExercises = EXERCISE_CATALOG.filter(
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  const filteredExercises = customExercises.filter(
     (ex) =>
       ex.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ex.category.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -250,20 +111,20 @@ export default function WorkoutBuilderPage() {
   return (
     <AppShell>
       <div className='space-y-6'>
-        {/* Toast Banner for Publish Feedback */}
-        {publishMessage && (
-          <div className='p-4 rounded-sm bg-[var(--color-surface-elevated-2)] border border-[var(--color-accent-primary)] text-[var(--color-accent-primary)] flex items-center justify-between animate-in fade-in'>
-            <div className='flex items-center gap-2 text-[14px]'>
-              <CheckCircle2 className='h-4 w-4' />
-              <span>{publishMessage}</span>
+        {/* Toast Feedback Banner */}
+        {toastMsg && (
+          <div className='p-3.5 rounded-sm bg-[var(--color-surface-elevated)] border border-[var(--color-accent-primary)] text-[var(--color-accent-primary)] flex items-center justify-between text-[13px] font-mono animate-in fade-in'>
+            <div className='flex items-center gap-2'>
+              <CheckCircle2 className='h-4 w-4 flex-shrink-0' />
+              <span>{toastMsg}</span>
             </div>
-            <button onClick={() => setPublishMessage(null)}>
+            <button onClick={() => setToastMsg(null)}>
               <X className='h-4 w-4' />
             </button>
           </div>
         )}
 
-        {/* Builder Header with Versioning Snapshot Controls */}
+        {/* Builder Header */}
         <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--color-border-default)] pb-4'>
           <div className='flex items-center gap-3'>
             <Link
@@ -274,74 +135,59 @@ export default function WorkoutBuilderPage() {
             </Link>
             <div>
               <div className='flex items-center gap-2'>
-                <h1 className='font-display text-[24px] font-semibold text-[var(--color-text-primary)]'>
-                  Hypertrophy Spec Builder
-                </h1>
-                {isPublished && (
-                  <span className='px-2 py-0.5 rounded-sm bg-[var(--color-accent-subtle)] border border-[var(--color-accent-primary)] text-[11px] font-mono font-semibold text-[var(--color-accent-primary)]'>
-                    ACTIVE PLAN
-                  </span>
-                )}
-              </div>
-
-              {/* Snapshot Select Control */}
-              <div className='flex items-center gap-2 mt-1'>
-                <History className='h-3.5 w-3.5 text-[var(--color-text-muted)]' />
-                <span className='text-[12px] text-[var(--color-text-muted)]'>
-                  Snapshot:
-                </span>
                 <select
-                  onChange={(e) => {
-                    const snap = snapshots.find((s) => s.id === e.target.value);
-                    if (snap) handleRestoreSnapshot(snap);
-                  }}
-                  className='bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] rounded text-[12px] text-[var(--color-text-secondary)] px-2 py-0.5 focus:outline-none'
+                  value={selectedPlanId}
+                  onChange={(e) => setSelectedPlanId(e.target.value)}
+                  className='bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] rounded-sm font-display text-[20px] font-semibold text-[var(--color-text-primary)] px-2 py-1 focus:outline-none focus:border-[var(--color-accent-primary)]'
                 >
-                  {snapshots.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.timestamp})
+                  {plans.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} {p.isActive ? "(ACTIVE)" : ""}
                     </option>
                   ))}
                 </select>
               </div>
+              <p className='text-[12px] text-[var(--color-text-muted)] mt-0.5'>
+                {activePlan?.description}
+              </p>
             </div>
           </div>
 
           <div className='flex items-center gap-2'>
             <Button
               variant='secondary'
-              onClick={() => setIsSnapshotModalOpen(true)}
+              onClick={() => setIsNewPlanModalOpen(true)}
               className='gap-2 text-[13px]'
             >
-              <Save className='h-4 w-4' />
-              <span>Save Snapshot</span>
+              <Plus className='h-4 w-4' />
+              <span>New Routine Spec</span>
             </Button>
             <Button onClick={handlePublishPlan} className='gap-2 text-[13px]'>
-              <span>Publish Plan</span>
+              <span>Set as Active Program</span>
             </Button>
           </div>
         </div>
 
-        {/* Workspace Layout */}
+        {/* Builder Workspace */}
         <div className='grid grid-cols-1 lg:grid-cols-4 gap-6'>
           {/* Day Navigation Rail */}
           <div className='lg:col-span-1 space-y-3'>
             <div className='flex items-center justify-between px-1'>
-              <span className='text-[12px] font-semibold tracking-wider text-[var(--color-text-secondary)] uppercase'>
-                Plan Structure
+              <span className='text-[12px] font-mono text-[var(--color-text-secondary)] uppercase'>
+                Program Days
               </span>
               <button
                 type='button'
                 onClick={handleAddDay}
-                className='text-[12px] text-[var(--color-accent-primary)] hover:underline flex items-center gap-1 cursor-pointer'
+                className='text-[12px] font-mono text-[var(--color-accent-primary)] hover:underline flex items-center gap-1 cursor-pointer'
               >
                 <Plus className='h-3.5 w-3.5' /> Add Day
               </button>
             </div>
 
             <div className='space-y-1.5'>
-              {days.map((day) => {
-                const isActive = day.id === selectedDayId;
+              {activePlan?.days.map((day) => {
+                const isActive = activeDay?.id === day.id;
                 return (
                   <button
                     key={day.id}
@@ -352,7 +198,7 @@ export default function WorkoutBuilderPage() {
                         : "bg-[var(--color-surface-elevated)] border-[var(--color-border-default)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)]"
                     }`}
                   >
-                    <div className='flex items-center gap-2.5'>
+                    <div className='flex items-center gap-2'>
                       <GripVertical className='h-4 w-4 text-[var(--color-text-muted)] cursor-grab' />
                       <span>{day.name}</span>
                     </div>
@@ -365,7 +211,7 @@ export default function WorkoutBuilderPage() {
             </div>
           </div>
 
-          {/* Main Exercise Editor */}
+          {/* Main Exercise Spec Editor */}
           <div className='lg:col-span-3 space-y-4'>
             {activeDay ? (
               <Card>
@@ -374,9 +220,9 @@ export default function WorkoutBuilderPage() {
                     <CardTitle className='text-[20px]'>
                       {activeDay.name}
                     </CardTitle>
-                    <p className='text-[13px] text-[var(--color-text-secondary)] mt-0.5'>
+                    <p className='text-[12px] text-[var(--color-text-secondary)] mt-0.5 font-mono'>
                       Target Schedule:{" "}
-                      <span className='font-mono text-[var(--color-accent-primary)]'>
+                      <span className='text-[var(--color-accent-primary)]'>
                         {activeDay.targetDay}
                       </span>
                     </p>
@@ -394,17 +240,17 @@ export default function WorkoutBuilderPage() {
 
                 <CardContent className='pt-4 space-y-3'>
                   {activeDay.exercises.length === 0 ? (
-                    <div className='p-8 text-center border border-dashed border-[var(--color-border-default)] rounded-sm'>
-                      <Dumbbell className='h-8 w-8 text-[var(--color-text-muted)] mx-auto mb-2' />
+                    <div className='p-8 text-center border border-dashed border-[var(--color-border-default)] rounded-sm space-y-3'>
+                      <Dumbbell className='h-8 w-8 text-[var(--color-text-muted)] mx-auto' />
                       <p className='text-[14px] text-[var(--color-text-secondary)]'>
-                        No exercises configured for this day yet.
+                        No exercises configured for {activeDay.name} yet.
                       </p>
                       <Button
                         variant='ghost'
                         onClick={() => setIsExerciseModalOpen(true)}
-                        className='mt-2 text-[13px] text-[var(--color-accent-primary)]'
+                        className='text-[13px] text-[var(--color-accent-primary)]'
                       >
-                        + Select Exercise from Library
+                        + Select Exercise from Catalog
                       </Button>
                     </div>
                   ) : (
@@ -414,126 +260,63 @@ export default function WorkoutBuilderPage() {
                         className='p-4 rounded-sm bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] space-y-3 hover:border-[var(--color-border-strong)] transition-colors'
                       >
                         <div className='flex items-center justify-between gap-2'>
-                          <div className='flex items-center gap-2.5'>
-                            <GripVertical className='h-4 w-4 text-[var(--color-text-muted)] cursor-grab' />
-                            <div>
-                              <h3 className='text-[15px] font-semibold text-[var(--color-text-primary)]'>
-                                {ex.name}
-                              </h3>
-                              <span className='text-[12px] text-[var(--color-text-muted)]'>
-                                {ex.category}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className='flex items-center gap-1'>
-                            <button
-                              type='button'
-                              onClick={() => handleDuplicateExercise(ex.id)}
-                              aria-label='Duplicate exercise'
-                              className='p-2 rounded-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-elevated)] transition-colors cursor-pointer'
-                            >
-                              <Copy className='h-4 w-4' />
-                            </button>
-                            <button
-                              type='button'
-                              onClick={() => handleRemoveExercise(ex.id)}
-                              aria-label='Remove exercise'
-                              className='p-2 rounded-sm text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-surface-elevated)] transition-colors cursor-pointer'
-                            >
-                              <Trash2 className='h-4 w-4' />
-                            </button>
+                          <div>
+                            <h3 className='text-[15px] font-semibold text-[var(--color-text-primary)]'>
+                              {ex.name}
+                            </h3>
+                            <span className='text-[12px] text-[var(--color-text-muted)] font-mono'>
+                              {ex.category}
+                            </span>
                           </div>
                         </div>
 
-                        {/* Inline Set Steppers */}
-                        <div className='grid grid-cols-3 gap-3 pt-2 border-t border-[var(--color-border-default)]'>
-                          <div className='flex items-center justify-between p-2 rounded bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)]'>
-                            <span className='text-[12px] text-[var(--color-text-muted)] font-mono'>
-                              SETS
-                            </span>
-                            <div className='flex items-center gap-2'>
-                              <button
-                                type='button'
-                                onClick={() =>
-                                  handleUpdateConfig(ex.id, "sets", -1)
-                                }
-                                className='w-6 h-6 rounded bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] flex items-center justify-center font-mono text-[14px]'
-                              >
-                                -
-                              </button>
-                              <span className='tabular-nums font-mono text-[14px] text-[var(--color-text-primary)]'>
-                                {ex.config.sets}
-                              </span>
-                              <button
-                                type='button'
-                                onClick={() =>
-                                  handleUpdateConfig(ex.id, "sets", 1)
-                                }
-                                className='w-6 h-6 rounded bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] flex items-center justify-center font-mono text-[14px]'
-                              >
-                                +
-                              </button>
-                            </div>
-                          </div>
+                        {/* Set Configurations */}
+                        <div className='space-y-2 pt-1 border-t border-[var(--color-border-default)]'>
+                          {ex.sets.map((set, sIdx) => (
+                            <div
+                              key={set.id}
+                              className='grid grid-cols-3 gap-3 p-2 rounded bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)] items-center'
+                            >
+                              <div className='flex items-center justify-between px-2'>
+                                <span className='text-[11px] font-mono text-[var(--color-text-muted)]'>
+                                  SET {sIdx + 1}
+                                </span>
+                                <span className='text-[12px] font-mono font-medium'>
+                                  {set.weight} kg
+                                </span>
+                              </div>
 
-                          <div className='flex items-center justify-between p-2 rounded bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)]'>
-                            <span className='text-[12px] text-[var(--color-text-muted)] font-mono'>
-                              REPS
-                            </span>
-                            <div className='flex items-center gap-2'>
-                              <button
-                                type='button'
-                                onClick={() =>
-                                  handleUpdateConfig(ex.id, "targetReps", -1)
-                                }
-                                className='w-6 h-6 rounded bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] flex items-center justify-center font-mono text-[14px]'
-                              >
-                                -
-                              </button>
-                              <span className='tabular-nums font-mono text-[14px] text-[var(--color-text-primary)]'>
-                                {ex.config.targetReps}
-                              </span>
-                              <button
-                                type='button'
-                                onClick={() =>
-                                  handleUpdateConfig(ex.id, "targetReps", 1)
-                                }
-                                className='w-6 h-6 rounded bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] flex items-center justify-center font-mono text-[14px]'
-                              >
-                                +
-                              </button>
-                            </div>
-                          </div>
+                              <div className='flex items-center justify-between px-2'>
+                                <span className='text-[11px] font-mono text-[var(--color-text-muted)]'>
+                                  REPS
+                                </span>
+                                <input
+                                  type='number'
+                                  value={set.targetReps}
+                                  onChange={(e) =>
+                                    updateSetInPlan(
+                                      activePlan.id,
+                                      activeDay.id,
+                                      ex.id,
+                                      sIdx,
+                                      "targetReps",
+                                      Number(e.target.value),
+                                    )
+                                  }
+                                  className='w-12 bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] rounded px-1 text-center text-[13px] font-mono text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-primary)]'
+                                />
+                              </div>
 
-                          <div className='flex items-center justify-between p-2 rounded bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)]'>
-                            <span className='text-[12px] text-[var(--color-text-muted)] font-mono flex items-center gap-1'>
-                              <Clock className='h-3 w-3' /> REST
-                            </span>
-                            <div className='flex items-center gap-2'>
-                              <button
-                                type='button'
-                                onClick={() =>
-                                  handleUpdateConfig(ex.id, "restSeconds", -30)
-                                }
-                                className='w-6 h-6 rounded bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] flex items-center justify-center font-mono text-[12px]'
-                              >
-                                -
-                              </button>
-                              <span className='tabular-nums font-mono text-[13px] text-[var(--color-text-primary)]'>
-                                {ex.config.restSeconds}s
-                              </span>
-                              <button
-                                type='button'
-                                onClick={() =>
-                                  handleUpdateConfig(ex.id, "restSeconds", 30)
-                                }
-                                className='w-6 h-6 rounded bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] flex items-center justify-center font-mono text-[12px]'
-                              >
-                                +
-                              </button>
+                              <div className='flex items-center justify-between px-2'>
+                                <span className='text-[11px] font-mono text-[var(--color-text-muted)] flex items-center gap-1'>
+                                  <Clock className='h-3 w-3' /> REST
+                                </span>
+                                <span className='text-[12px] font-mono text-[var(--color-text-primary)]'>
+                                  {set.restSeconds}s
+                                </span>
+                              </div>
                             </div>
-                          </div>
+                          ))}
                         </div>
                       </div>
                     ))
@@ -545,9 +328,9 @@ export default function WorkoutBuilderPage() {
         </div>
       </div>
 
-      {/* Modal 1: Add Exercise Catalog Picker */}
+      {/* Modal 1: Select Exercise Catalog Picker */}
       {isExerciseModalOpen && (
-        <div className='fixed inset-0 z-50 bg-[#0E1113]/70 flex items-center justify-center p-4'>
+        <div className='fixed inset-0 z-50 bg-[#0E1113]/80 backdrop-blur-xs flex items-center justify-center p-4'>
           <div className='bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)] rounded-md w-full max-w-[480px] space-y-4 p-5'>
             <div className='flex items-center justify-between border-b border-[var(--color-border-default)] pb-3'>
               <h3 className='text-[18px] font-semibold text-[var(--color-text-primary)] font-display'>
@@ -558,30 +341,39 @@ export default function WorkoutBuilderPage() {
               </button>
             </div>
 
-            <div className='relative'>
-              <Search className='h-4 w-4 absolute left-3 top-3 text-[var(--color-text-muted)]' />
-              <input
-                type='text'
-                placeholder='Search exercise or muscle group...'
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className='w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] rounded-sm pl-9 pr-3 py-2 text-[14px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-primary)]'
-              />
+            <div className='flex gap-2'>
+              <div className='relative flex-1'>
+                <Search className='h-4 w-4 absolute left-3 top-3 text-[var(--color-text-muted)]' />
+                <input
+                  type='text'
+                  placeholder='Search exercise catalog...'
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className='w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] rounded-sm pl-9 pr-3 py-2 text-[14px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-primary)]'
+                />
+              </div>
+              <Button
+                variant='secondary'
+                onClick={() => setIsCustomExModalOpen(true)}
+                className='text-[12px] px-2.5 whitespace-nowrap'
+              >
+                + Custom Movement
+              </Button>
             </div>
 
             <div className='max-h-[280px] overflow-y-auto space-y-1'>
-              {filteredExercises.map((ex, i) => (
+              {filteredExercises.map((ex) => (
                 <button
-                  key={i}
-                  onClick={() => handleSelectExercise(ex.name, ex.category)}
-                  className='w-full text-left p-3 rounded-sm hover:bg-[var(--color-surface-elevated-2)] border border-transparent hover:border-[var(--color-border-default)] flex items-center justify-between transition-colors'
+                  key={ex.id}
+                  onClick={() => handleSelectExercise(ex)}
+                  className='w-full text-left p-3 rounded-sm hover:bg-[var(--color-surface-elevated-2)] border border-transparent hover:border-[var(--color-border-default)] flex items-center justify-between transition-colors cursor-pointer'
                 >
                   <div>
                     <h4 className='text-[14px] font-medium text-[var(--color-text-primary)]'>
                       {ex.name}
                     </h4>
-                    <span className='text-[12px] text-[var(--color-text-muted)]'>
-                      {ex.category}
+                    <span className='text-[12px] text-[var(--color-text-muted)] font-mono'>
+                      {ex.category} • {ex.equipment}
                     </span>
                   </div>
                   <Plus className='h-4 w-4 text-[var(--color-accent-primary)]' />
@@ -592,40 +384,123 @@ export default function WorkoutBuilderPage() {
         </div>
       )}
 
-      {/* Modal 2: Save Version Snapshot */}
-      {isSnapshotModalOpen && (
-        <div className='fixed inset-0 z-50 bg-[#0E1113]/70 flex items-center justify-center p-4'>
-          <div className='bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)] rounded-md w-full max-w-[400px] space-y-4 p-5'>
+      {/* Modal 2: Create Custom Routine */}
+      {isNewPlanModalOpen && (
+        <div className='fixed inset-0 z-50 bg-[#0E1113]/80 backdrop-blur-xs flex items-center justify-center p-4'>
+          <div className='bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)] rounded-md w-full max-w-[420px] space-y-4 p-5'>
             <div className='flex items-center justify-between border-b border-[var(--color-border-default)] pb-3'>
               <h3 className='text-[18px] font-semibold text-[var(--color-text-primary)] font-display'>
-                Save Spec Snapshot
+                Create Routine Spec
               </h3>
-              <button onClick={() => setIsSnapshotModalOpen(false)}>
+              <button onClick={() => setIsNewPlanModalOpen(false)}>
                 <X className='h-5 w-5 text-[var(--color-text-muted)]' />
               </button>
             </div>
 
-            <div className='space-y-2'>
-              <label className='text-[12px] font-mono text-[var(--color-text-secondary)] uppercase'>
-                Snapshot Name
-              </label>
-              <input
-                type='text'
-                placeholder='e.g. Deload Week Baseline'
-                value={snapshotName}
-                onChange={(e) => setSnapshotName(e.target.value)}
-                className='w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] rounded-sm px-3 py-2 text-[14px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-primary)]'
-              />
+            <div className='space-y-3'>
+              <div className='space-y-1'>
+                <label className='text-[12px] font-mono text-[var(--color-text-muted)] uppercase'>
+                  Routine Name
+                </label>
+                <input
+                  type='text'
+                  placeholder='e.g. 5-Day Push/Pull/Legs Hypertrophy'
+                  value={newPlanName}
+                  onChange={(e) => setNewPlanName(e.target.value)}
+                  className='w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] rounded-sm px-3 py-2 text-[14px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-primary)]'
+                />
+              </div>
+
+              <div className='space-y-1'>
+                <label className='text-[12px] font-mono text-[var(--color-text-muted)] uppercase'>
+                  Description
+                </label>
+                <input
+                  type='text'
+                  placeholder='e.g. Focused on compound progression'
+                  value={newPlanDesc}
+                  onChange={(e) => setNewPlanDesc(e.target.value)}
+                  className='w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] rounded-sm px-3 py-2 text-[14px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-primary)]'
+                />
+              </div>
             </div>
 
             <div className='flex justify-end gap-2 pt-2'>
               <Button
                 variant='ghost'
-                onClick={() => setIsSnapshotModalOpen(false)}
+                onClick={() => setIsNewPlanModalOpen(false)}
               >
                 Cancel
               </Button>
-              <Button onClick={handleCreateSnapshot}>Save Snapshot</Button>
+              <Button onClick={handleCreatePlan}>Create Routine</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 3: Custom Exercise Creator */}
+      {isCustomExModalOpen && (
+        <div className='fixed inset-0 z-50 bg-[#0E1113]/80 backdrop-blur-xs flex items-center justify-center p-4'>
+          <div className='bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)] rounded-md w-full max-w-[400px] space-y-4 p-5'>
+            <div className='flex items-center justify-between border-b border-[var(--color-border-default)] pb-3'>
+              <h3 className='text-[18px] font-semibold text-[var(--color-text-primary)] font-display'>
+                Add Custom Movement
+              </h3>
+              <button onClick={() => setIsCustomExModalOpen(false)}>
+                <X className='h-5 w-5 text-[var(--color-text-muted)]' />
+              </button>
+            </div>
+
+            <div className='space-y-3'>
+              <div className='space-y-1'>
+                <label className='text-[12px] font-mono text-[var(--color-text-muted)] uppercase'>
+                  Movement Name
+                </label>
+                <input
+                  type='text'
+                  placeholder='e.g. Deficit Reverse Lunge'
+                  value={customExName}
+                  onChange={(e) => setCustomExName(e.target.value)}
+                  className='w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] rounded-sm px-3 py-2 text-[14px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-primary)]'
+                />
+              </div>
+
+              <div className='space-y-1'>
+                <label className='text-[12px] font-mono text-[var(--color-text-muted)] uppercase'>
+                  Body Group
+                </label>
+                <select
+                  value={customExCategory}
+                  onChange={(e) => setCustomExCategory(e.target.value)}
+                  className='w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] rounded-sm px-3 py-2 text-[14px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-primary)]'
+                >
+                  {[
+                    "Chest",
+                    "Back",
+                    "Quads",
+                    "Posterior Chain",
+                    "Shoulders",
+                    "Arms",
+                    "Core",
+                  ].map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className='flex justify-end gap-2 pt-2'>
+              <Button
+                variant='ghost'
+                onClick={() => setIsCustomExModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleCreateCustomExercise}>
+                Add to Library
+              </Button>
             </div>
           </div>
         </div>
