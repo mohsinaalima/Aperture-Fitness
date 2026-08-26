@@ -2,15 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  Check,
-  Calculator,
-  Play,
-  Plus,
-  ChevronRight,
-  Sparkles,
-} from "lucide-react";
+import { Check, Calculator, Play, ChevronRight, Flame } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,6 +10,7 @@ import { NumericStepper } from "@/components/ui/numeric-stepper";
 import { ApertureIrisProgress } from "@/components/ui/aperture-iris";
 import { useAppStore } from "@/store/app-store";
 import { PlateCalculatorModal } from "@/components/ui/plate-calculator-modal";
+import { WarmupCalculatorModal } from "@/components/ui/warmup-calculator-modal";
 
 export default function WorkoutLoggerPage() {
   const {
@@ -33,8 +26,8 @@ export default function WorkoutLoggerPage() {
   const [weight, setWeight] = useState(80);
   const [reps, setReps] = useState(8);
   const [isPlateCalcOpen, setIsPlateCalcOpen] = useState(false);
+  const [isWarmupCalcOpen, setIsWarmupCalcOpen] = useState(false);
 
-  // If no session is active, show the Quick Start Selector
   if (!activeWorkout) {
     const activePlan = plans.find((p) => p.isActive) || plans[0];
     return (
@@ -56,8 +49,8 @@ export default function WorkoutLoggerPage() {
                   <h3 className='font-display text-[18px] font-semibold text-[var(--color-text-primary)]'>
                     {activePlan.name}
                   </h3>
-                  <p className='text-[12px] text-[var(--color-text-secondary)]'>
-                    Active Assigned Program
+                  <p className='text-[12px] text-[var(--color-text-secondary)] font-mono'>
+                    Active Program
                   </p>
                 </div>
                 <ApertureIrisProgress value={100} size={28} />
@@ -74,7 +67,7 @@ export default function WorkoutLoggerPage() {
                       <h4 className='text-[15px] font-semibold text-[var(--color-text-primary)] group-hover:text-[var(--color-accent-primary)] transition-colors'>
                         {day.name}
                       </h4>
-                      <span className='text-[12px] text-[var(--color-text-muted)]'>
+                      <span className='text-[12px] text-[var(--color-text-muted)] font-mono'>
                         {day.exercises.length} exercises scheduled
                       </span>
                     </div>
@@ -102,7 +95,6 @@ export default function WorkoutLoggerPage() {
     );
   }
 
-  // Active Logger Logic
   const currentExercise = activeWorkout.exercises[activeExIndex];
   const currentSet = currentExercise?.sets[activeSetIndex];
 
@@ -110,7 +102,6 @@ export default function WorkoutLoggerPage() {
     if (!currentExercise || !currentSet) return;
     toggleSetCompletion(activeExIndex, activeSetIndex, weight, reps);
 
-    // Advance to next set or exercise automatically
     if (activeSetIndex < currentExercise.sets.length - 1) {
       setActiveSetIndex(activeSetIndex + 1);
     } else if (activeExIndex < activeWorkout.exercises.length - 1) {
@@ -137,26 +128,36 @@ export default function WorkoutLoggerPage() {
           </Button>
         </div>
 
-        {/* Exercise Header */}
+        {/* Exercise Title & Tools Bar */}
         <div className='flex items-start justify-between gap-2'>
           <div>
             <h1 className='font-display text-[26px] font-semibold text-[var(--color-text-primary)]'>
               {currentExercise?.name}
             </h1>
-            <span className='text-[12px] text-[var(--color-text-secondary)]'>
+            <span className='text-[12px] text-[var(--color-text-secondary)] font-mono'>
               {currentExercise?.category} • Exercise {activeExIndex + 1} of{" "}
               {activeWorkout.exercises.length}
             </span>
           </div>
 
-          <button
-            onClick={() => setIsPlateCalcOpen(true)}
-            aria-label='Plate Calculator'
-            className='flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)] text-[12px] font-mono text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer'
-          >
-            <Calculator className='h-3.5 w-3.5 text-[var(--color-accent-primary)]' />
-            <span>Plates</span>
-          </button>
+          <div className='flex items-center gap-1.5'>
+            <button
+              onClick={() => setIsWarmupCalcOpen(true)}
+              aria-label='Warm-up Calculator'
+              className='flex items-center gap-1 px-2.5 py-1.5 rounded-sm bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)] text-[12px] font-mono text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer'
+            >
+              <Flame className='h-3.5 w-3.5 text-[var(--color-accent-primary)]' />
+              <span>Warmup</span>
+            </button>
+            <button
+              onClick={() => setIsPlateCalcOpen(true)}
+              aria-label='Plate Calculator'
+              className='flex items-center gap-1 px-2.5 py-1.5 rounded-sm bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)] text-[12px] font-mono text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer'
+            >
+              <Calculator className='h-3.5 w-3.5 text-[var(--color-accent-primary)]' />
+              <span>Plates</span>
+            </button>
+          </div>
         </div>
 
         {/* Set Chips Selector */}
@@ -189,7 +190,7 @@ export default function WorkoutLoggerPage() {
           })}
         </div>
 
-        {/* Weight & Rep Steppers */}
+        {/* Steppers */}
         <Card className='p-4 space-y-4'>
           <NumericStepper
             label='Load Weight'
@@ -207,7 +208,7 @@ export default function WorkoutLoggerPage() {
           />
         </Card>
 
-        {/* Primary Set Completion Button */}
+        {/* Set Completion Button */}
         <Button
           size='logger'
           onClick={handleToggleSet}
@@ -221,7 +222,7 @@ export default function WorkoutLoggerPage() {
           </span>
         </Button>
 
-        {/* Exercise Switch Rail */}
+        {/* Navigation Rail */}
         <div className='flex items-center justify-between pt-2 border-t border-[var(--color-border-default)]'>
           <button
             disabled={activeExIndex === 0}
@@ -245,11 +246,16 @@ export default function WorkoutLoggerPage() {
           </button>
         </div>
 
-        {/* Plate Calculator Modal */}
+        {/* Modals */}
         <PlateCalculatorModal
           isOpen={isPlateCalcOpen}
           onClose={() => setIsPlateCalcOpen(false)}
           targetWeight={weight}
+        />
+        <WarmupCalculatorModal
+          isOpen={isWarmupCalcOpen}
+          onClose={() => setIsWarmupCalcOpen(false)}
+          workingWeight={weight}
         />
       </div>
     </AppShell>
