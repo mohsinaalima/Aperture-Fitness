@@ -1,227 +1,256 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { ArrowLeft, RefreshCw, MessageSquare, Check, SkipForward } from "lucide-react";
+import React, { useState } from "react";
 import Link from "next/link";
+import {
+  ArrowLeft,
+  Check,
+  Calculator,
+  Play,
+  Plus,
+  ChevronRight,
+  Sparkles,
+} from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { NumericStepper } from "@/components/ui/numeric-stepper";
 import { ApertureIrisProgress } from "@/components/ui/aperture-iris";
-
-interface SetData {
-  id: number;
-  weight: number;
-  reps: number;
-  completed: boolean;
-}
-
-const INITIAL_SETS: SetData[] = [
-  { id: 1, weight: 80, reps: 8, completed: true },
-  { id: 2, weight: 82.5, reps: 8, completed: true },
-  { id: 3, weight: 85, reps: 6, completed: false },
-  { id: 4, weight: 85, reps: 6, completed: false },
-];
+import { useAppStore } from "@/store/app-store";
+import { PlateCalculatorModal } from "@/components/ui/plate-calculator-modal";
 
 export default function WorkoutLoggerPage() {
-  const [sets, setSets] = useState<SetData[]>(INITIAL_SETS);
-  const [currentSetIndex, setCurrentSetIndex] = useState(2); // Set 3 active
-  const [weight, setWeight] = useState(85);
-  const [reps, setReps] = useState(6);
-  const [isResting, setIsResting] = useState(false);
-  const [restSeconds, setRestSeconds] = useState(90);
-  const [showNotes, setShowNotes] = useState(false);
-  const [noteText, setNoteText] = useState("");
+  const {
+    plans,
+    activeWorkout,
+    startWorkoutSession,
+    toggleSetCompletion,
+    finishWorkoutSession,
+  } = useAppStore();
 
-  // Synchronize stepper values with selected set
-  useEffect(() => {
-    const activeSet = sets[currentSetIndex];
-    if (activeSet) {
-      setWeight(activeSet.weight);
-      setReps(activeSet.reps);
-    }
-  }, [currentSetIndex, sets]);
+  const [activeExIndex, setActiveExIndex] = useState(0);
+  const [activeSetIndex, setActiveSetIndex] = useState(0);
+  const [weight, setWeight] = useState(80);
+  const [reps, setReps] = useState(8);
+  const [isPlateCalcOpen, setIsPlateCalcOpen] = useState(false);
 
-  // Rest Timer Countdown Simulation
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (isResting && restSeconds > 0) {
-      timer = setInterval(() => setRestSeconds((prev) => prev - 1), 1000);
-    } else if (restSeconds === 0) {
-      setIsResting(false);
-    }
-    return () => clearInterval(timer);
-  }, [isResting, restSeconds]);
+  // If no session is active, show the Quick Start Selector
+  if (!activeWorkout) {
+    const activePlan = plans.find((p) => p.isActive) || plans[0];
+    return (
+      <AppShell>
+        <div className='max-w-[480px] mx-auto space-y-6 pt-4'>
+          <div className='text-center space-y-2'>
+            <span className='text-[12px] font-mono text-[var(--color-accent-primary)] uppercase tracking-wider'>
+              Gym Floor Logger
+            </span>
+            <h1 className='font-display text-[28px] font-semibold text-[var(--color-text-primary)]'>
+              Select Workout Session
+            </h1>
+          </div>
 
-  const handleCompleteSet = () => {
-    // Update active set
-    const updatedSets = [...sets];
-    updatedSets[currentSetIndex] = {
-      ...updatedSets[currentSetIndex],
-      weight,
-      reps,
-      completed: true,
-    };
-    setSets(updatedSets);
+          {activePlan && (
+            <Card className='p-4 space-y-4 border-[var(--color-accent-primary)]/40'>
+              <div className='flex items-center justify-between border-b border-[var(--color-border-default)] pb-3'>
+                <div>
+                  <h3 className='font-display text-[18px] font-semibold text-[var(--color-text-primary)]'>
+                    {activePlan.name}
+                  </h3>
+                  <p className='text-[12px] text-[var(--color-text-secondary)]'>
+                    Active Assigned Program
+                  </p>
+                </div>
+                <ApertureIrisProgress value={100} size={28} />
+              </div>
 
-    // Trigger Rest Timer (90 seconds)
-    setRestSeconds(90);
-    setIsResting(true);
+              <div className='space-y-2'>
+                {activePlan.days.map((day) => (
+                  <button
+                    key={day.id}
+                    onClick={() => startWorkoutSession(activePlan.id, day.id)}
+                    className='w-full flex items-center justify-between p-3.5 rounded-sm bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] hover:border-[var(--color-accent-primary)] transition-colors text-left cursor-pointer group'
+                  >
+                    <div>
+                      <h4 className='text-[15px] font-semibold text-[var(--color-text-primary)] group-hover:text-[var(--color-accent-primary)] transition-colors'>
+                        {day.name}
+                      </h4>
+                      <span className='text-[12px] text-[var(--color-text-muted)]'>
+                        {day.exercises.length} exercises scheduled
+                      </span>
+                    </div>
+                    <div className='flex items-center gap-1 text-[13px] font-semibold text-[var(--color-accent-primary)]'>
+                      <Play className='h-4 w-4 fill-current' />
+                      <span>Start</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </Card>
+          )}
 
-    // Advance to next set if available
-    if (currentSetIndex < sets.length - 1) {
-      setCurrentSetIndex(currentSetIndex + 1);
+          <div className='text-center'>
+            <Link
+              href='/plans/builder'
+              className='text-[13px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] inline-flex items-center gap-1'
+            >
+              <span>Create custom routine in Builder</span>
+              <ChevronRight className='h-3.5 w-3.5' />
+            </Link>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  // Active Logger Logic
+  const currentExercise = activeWorkout.exercises[activeExIndex];
+  const currentSet = currentExercise?.sets[activeSetIndex];
+
+  const handleToggleSet = () => {
+    if (!currentExercise || !currentSet) return;
+    toggleSetCompletion(activeExIndex, activeSetIndex, weight, reps);
+
+    // Advance to next set or exercise automatically
+    if (activeSetIndex < currentExercise.sets.length - 1) {
+      setActiveSetIndex(activeSetIndex + 1);
+    } else if (activeExIndex < activeWorkout.exercises.length - 1) {
+      setActiveExIndex(activeExIndex + 1);
+      setActiveSetIndex(0);
     }
   };
 
-  const currentSet = sets[currentSetIndex];
-
   return (
     <AppShell>
-      {/* Logger constrained to 480px max width per Section 7 & 10 */}
-      <div className="max-w-[480px] mx-auto space-y-5 pb-6">
-        {/* Top Header & Navigation */}
-        <div className="flex items-center justify-between">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1.5 text-[13px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Dashboard</span>
-          </Link>
-          <span className="text-[12px] font-mono font-medium text-[var(--color-accent-primary)] uppercase tracking-wider">
-            Upper Body Power • 3/5 Exercises
+      <div className='max-w-[480px] mx-auto space-y-5 pb-8'>
+        {/* Header */}
+        <div className='flex items-center justify-between'>
+          <span className='text-[12px] font-mono font-semibold text-[var(--color-accent-primary)] uppercase'>
+            {activeWorkout.dayName}
           </span>
+          <Button
+            variant='secondary'
+            size='default'
+            onClick={finishWorkoutSession}
+            className='text-[12px] font-mono text-[var(--color-accent-primary)] border-[var(--color-accent-primary)]/40'
+          >
+            Finish Workout
+          </Button>
         </div>
 
-        {/* 1. Exercise Name & Swap Affordance (Section 10.1) */}
-        <div className="flex items-start justify-between gap-4 pt-1">
+        {/* Exercise Header */}
+        <div className='flex items-start justify-between gap-2'>
           <div>
-            <h1 className="font-display text-[24px] md:text-[28px] font-semibold leading-tight text-[var(--color-text-primary)]">
-              Barbell Bench Press
+            <h1 className='font-display text-[26px] font-semibold text-[var(--color-text-primary)]'>
+              {currentExercise?.name}
             </h1>
-            <p className="text-[13px] text-[var(--color-text-secondary)] mt-0.5">
-              Primary Chest / Front Delts • RPE 8.5
-            </p>
+            <span className='text-[12px] text-[var(--color-text-secondary)]'>
+              {currentExercise?.category} • Exercise {activeExIndex + 1} of{" "}
+              {activeWorkout.exercises.length}
+            </span>
           </div>
+
           <button
-            type="button"
-            aria-label="Swap exercise"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)] text-[12px] font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
+            onClick={() => setIsPlateCalcOpen(true)}
+            aria-label='Plate Calculator'
+            className='flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm bg-[var(--color-surface-elevated)] border border-[var(--color-border-default)] text-[12px] font-mono text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer'
           >
-            <RefreshCw className="h-3.5 w-3.5" />
-            <span>Swap</span>
+            <Calculator className='h-3.5 w-3.5 text-[var(--color-accent-primary)]' />
+            <span>Plates</span>
           </button>
         </div>
 
-        {/* 2. Set Indicator Chips Row (Section 10.2) */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {sets.map((set, index) => {
-            const isActive = index === currentSetIndex;
+        {/* Set Chips Selector */}
+        <div className='flex items-center gap-2 overflow-x-auto pb-1'>
+          {currentExercise?.sets.map((set, idx) => {
+            const isActive = idx === activeSetIndex;
             return (
               <button
                 key={set.id}
-                type="button"
-                onClick={() => setCurrentSetIndex(index)}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-sm border text-[13px] font-mono transition-all cursor-pointer ${
+                onClick={() => {
+                  setActiveSetIndex(idx);
+                  setWeight(set.weight);
+                  setReps(set.targetReps);
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-sm border text-[13px] font-mono transition-all cursor-pointer ${
                   isActive
                     ? "bg-[var(--color-accent-subtle)] border-[var(--color-accent-primary)] text-[var(--color-accent-primary)] font-semibold"
                     : set.completed
-                    ? "bg-[var(--color-bg-secondary)] border-[var(--color-border-default)] text-[var(--color-text-primary)]"
-                    : "bg-[var(--color-bg-primary)] border-[var(--color-border-default)] text-[var(--color-text-muted)]"
+                      ? "bg-[var(--color-bg-secondary)] border-[var(--color-border-default)] text-[var(--color-text-primary)]"
+                      : "bg-[var(--color-bg-primary)] border-[var(--color-border-default)] text-[var(--color-text-muted)]"
                 }`}
               >
                 {set.completed ? (
-                  <ApertureIrisProgress value={100} size={18} />
+                  <ApertureIrisProgress value={100} size={16} />
                 ) : (
-                  <span>SET {set.id}</span>
+                  <span>SET {idx + 1}</span>
                 )}
               </button>
             );
           })}
         </div>
 
-        {/* 3. Weight and Rep Steppers Cluster (Section 10.3) */}
-        <Card className="p-4 space-y-4">
+        {/* Weight & Rep Steppers */}
+        <Card className='p-4 space-y-4'>
           <NumericStepper
-            label="Load Weight"
+            label='Load Weight'
             value={weight}
             onChange={setWeight}
             step={2.5}
-            unit="kg"
+            unit='kg'
           />
           <NumericStepper
-            label="Completed Repetitions"
+            label='Target Repetitions'
             value={reps}
             onChange={setReps}
             step={1}
-            unit="reps"
+            unit='reps'
           />
         </Card>
 
-        {/* 4. Rest Timer Card (Section 10.4 & Section 8) */}
-        {isResting && (
-          <Card className="border-[var(--color-accent-primary)]/40 bg-[var(--color-bg-secondary)] p-4 flex items-center justify-between gap-4 animate-in fade-in duration-200">
-            <div className="flex items-center gap-3">
-              <ApertureIrisProgress
-                value={((90 - restSeconds) / 90) * 100}
-                size={44}
-              />
-              <div>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                  Rest Interval
-                </span>
-                <div className="tabular-nums text-[24px] font-medium leading-none text-[var(--color-text-primary)]">
-                  {Math.floor(restSeconds / 60)}:
-                  {String(restSeconds % 60).padStart(2, "0")}
-                </div>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="default"
-              onClick={() => setIsResting(false)}
-              className="gap-1.5 text-[13px]"
-            >
-              <SkipForward className="h-4 w-4" />
-              <span>Skip Rest</span>
-            </Button>
-          </Card>
-        )}
+        {/* Primary Set Completion Button */}
+        <Button
+          size='logger'
+          onClick={handleToggleSet}
+          className='w-full h-[52px] text-[16px] gap-2 font-semibold shadow-lg'
+        >
+          <Check className='h-5 w-5 stroke-[2.5]' />
+          <span>
+            {currentSet?.completed
+              ? `Update Set ${activeSetIndex + 1}`
+              : `Complete Set ${activeSetIndex + 1}`}
+          </span>
+        </Button>
 
-        {/* 5. Fixed-Position Thumb-Zone Primary CTA (Section 10.5) */}
-        <div className="pt-2">
-          <Button
-            size="logger"
-            onClick={handleCompleteSet}
-            className="w-full h-[52px] text-[16px] gap-2 font-semibold shadow-lg"
-          >
-            <Check className="h-5 w-5 stroke-[2.5]" />
-            <span>Complete Set {currentSet?.id}</span>
-          </Button>
-        </div>
-
-        {/* 6. Collapsed Notes Trigger (Section 10.6) */}
-        <div className="pt-1">
+        {/* Exercise Switch Rail */}
+        <div className='flex items-center justify-between pt-2 border-t border-[var(--color-border-default)]'>
           <button
-            type="button"
-            onClick={() => setShowNotes(!showNotes)}
-            className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
+            disabled={activeExIndex === 0}
+            onClick={() => {
+              setActiveExIndex(activeExIndex - 1);
+              setActiveSetIndex(0);
+            }}
+            className='text-[13px] font-mono text-[var(--color-text-secondary)] disabled:opacity-30 cursor-pointer'
           >
-            <MessageSquare className="h-4 w-4 text-[var(--color-text-muted)]" />
-            <span>{showNotes ? "Hide Exercise Notes" : "Add Exercise Note"}</span>
+            ← Previous Exercise
           </button>
-
-          {showNotes && (
-            <textarea
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              placeholder="e.g. Pause at chest was clean on set 2..."
-              rows={3}
-              className="mt-2.5 w-full rounded-sm bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] p-3 text-[14px] text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:border-[var(--color-accent-primary)] focus:outline-none transition-colors"
-            />
-          )}
+          <button
+            disabled={activeExIndex === activeWorkout.exercises.length - 1}
+            onClick={() => {
+              setActiveExIndex(activeExIndex + 1);
+              setActiveSetIndex(0);
+            }}
+            className='text-[13px] font-mono text-[var(--color-accent-primary)] disabled:opacity-30 cursor-pointer'
+          >
+            Next Exercise →
+          </button>
         </div>
+
+        {/* Plate Calculator Modal */}
+        <PlateCalculatorModal
+          isOpen={isPlateCalcOpen}
+          onClose={() => setIsPlateCalcOpen(false)}
+          targetWeight={weight}
+        />
       </div>
     </AppShell>
   );
