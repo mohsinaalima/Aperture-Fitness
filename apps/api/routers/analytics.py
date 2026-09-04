@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from dependencies.database import get_db
+from core.database import get_db  # Updated import path from dependencies.database to core.database
 from dependencies.auth import get_current_user
 from repositories.analytics_repository import AnalyticsRepository
 from services.analytics_service import AnalyticsService

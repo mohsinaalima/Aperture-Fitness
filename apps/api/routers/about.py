@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from apps.api.dependencies.database import get_db
-from apps.api.schemas.about import AboutPageResponse
+from core.database import get_db
+from schemas.about import AboutPageResponse  # Removed the 'apps.api.' prefix
 
 router = APIRouter(prefix="/about", tags=["About"])
 
