@@ -1,13 +1,8 @@
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from core.config import settings dashboard
-from routers import auth, users, about, analytics, dashboard
-about
-from routers import auth, users, about  
-
-from routers import auth, users, plans
-main
+from core.config import settings
+from routers import auth, users, about, analytics, dashboard, plans, exercises
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -36,16 +31,11 @@ app.add_middleware(
 # Register Routers
 app.include_router(auth.router)
 app.include_router(users.router)
-
 app.include_router(about.router)
-app.include_router(analytics.router) 
+app.include_router(analytics.router)
 app.include_router(dashboard.router)
-
- about
-app.include_router(about.router)  
-
-app.include_router(plans.router, prefix="/api/v1")  # Added plans router with API prefix
- main
+app.include_router(exercises.router)
+app.include_router(plans.router, prefix="/api/v1")
 
 
 @app.get("/health", status_code=status.HTTP_200_OK, tags=["Health Checks"])
