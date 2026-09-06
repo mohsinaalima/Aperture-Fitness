@@ -2,7 +2,7 @@ from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
-from routers import auth, users, about, analytics, dashboard, plans, exercises
+from routers import auth, users, about, analytics, dashboard, plans, exercises, landing
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -35,6 +35,7 @@ app.include_router(about.router)
 app.include_router(analytics.router)
 app.include_router(dashboard.router)
 app.include_router(exercises.router)
+app.include_router(landing.router)
 app.include_router(plans.router, prefix="/api/v1")
 
 
