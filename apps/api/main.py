@@ -1,14 +1,34 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
-from routers import auth, users, about, analytics, dashboard, plans, exercises
+from core.database import engine, Base
+from routers import (
+    about,
+    analytics,
+    auth,
+    dashboard,
+    exercises,
+    plans,
+    pricing,
+    users,
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+
 
 app = FastAPI(
     title=settings.APP_NAME,
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # CORS Configuration
@@ -35,6 +55,7 @@ app.include_router(about.router)
 app.include_router(analytics.router)
 app.include_router(dashboard.router)
 app.include_router(exercises.router)
+app.include_router(pricing.router)
 app.include_router(plans.router, prefix="/api/v1")
 
 
