@@ -10,10 +10,16 @@ from routers import (
     auth,
     dashboard,
     exercises,
+
+    plans,
+    pricing,
+    users,
+
     owner_dashboard,
     plans,
     users,
     workout_logger,
+
 )
 
 
@@ -56,8 +62,12 @@ app.include_router(about.router)
 app.include_router(analytics.router)
 app.include_router(dashboard.router)
 app.include_router(exercises.router)
+
+app.include_router(pricing.router)
+
 app.include_router(workout_logger.router)
 app.include_router(owner_dashboard.router)
+
 app.include_router(plans.router, prefix="/api/v1")
 
 
