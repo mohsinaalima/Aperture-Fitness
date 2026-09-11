@@ -10,16 +10,12 @@ from routers import (
     auth,
     dashboard,
     exercises,
-
-    plans,
-    pricing,
-    users,
-
     owner_dashboard,
     plans,
+    pricing,
+    profile,
     users,
     workout_logger,
-
 )
 
 
@@ -38,7 +34,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS Configuration
 origins = [
     settings.FRONTEND_URL,
     "http://localhost:3000",
@@ -55,19 +50,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register Core Routers
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(profile.router)
 app.include_router(about.router)
 app.include_router(analytics.router)
 app.include_router(dashboard.router)
 app.include_router(exercises.router)
-
 app.include_router(pricing.router)
-
 app.include_router(workout_logger.router)
 app.include_router(owner_dashboard.router)
-
 app.include_router(plans.router, prefix="/api/v1")
 
 
