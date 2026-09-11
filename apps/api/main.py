@@ -14,6 +14,7 @@ from routers import (
     plans,
     pricing,
     profile,
+    trainer,
     users,
     workout_logger,
 )
@@ -50,9 +51,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Core Routers
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(profile.router)
+app.include_router(trainer.router)
 app.include_router(about.router)
 app.include_router(analytics.router)
 app.include_router(dashboard.router)
