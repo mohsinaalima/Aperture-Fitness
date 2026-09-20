@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.token import RefreshToken
+from models.token import RefreshToken
 
 class TokenRepository:
     def __init__(self, session: AsyncSession):
