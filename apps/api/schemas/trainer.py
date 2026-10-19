@@ -39,3 +39,9 @@ class ClientUpdate(BaseModel):
 
 class ClientResponse(ClientBase):
     id: str
+
+
+class ClientPlanUpdate(BaseModel):
+    assigned_plan: str = Field(..., alias="assignedPlan", min_length=1, max_length=150)
+
+    model_config = ConfigDict(populate_by_name=True)

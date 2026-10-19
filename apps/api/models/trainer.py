@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import String, Integer, DateTime, Enum
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.database import Base
+from models.base import Base
 
 class TrainerStatusEnum(str, enum.Enum):
     ACTIVE = "Active"
@@ -12,7 +12,7 @@ class TrainerStatusEnum(str, enum.Enum):
     ON_LEAVE = "On Leave"
 
 class Trainer(Base):
-    __tablename__ = "trainers"
+    __tablename__ = "trainer_records"
 
     id: Mapped[str] = mapped_column(
         String, primary_key=True, default=lambda: f"tr-{uuid.uuid4().hex[:6]}"

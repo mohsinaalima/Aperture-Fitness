@@ -26,24 +26,18 @@ class WorkoutLoggerService:
             user_id=user_id,
             plan_id=request.plan_id,
             day_id=request.day_id,
-            day_name="Push Day Alpha",
+            day_name=request.day_name,
             status="IN_PROGRESS",
         )
 
-        sample_exercises = [
-            ("Barbell Bench Press", "Chest", 4, 80.0, 8),
-            ("Incline Dumbbell Press", "Chest", 3, 30.0, 10),
-            ("Tricep Rope Pushdowns", "Triceps", 3, 25.0, 12),
-        ]
-
-        for idx, (name, cat, set_count, default_w, default_reps) in enumerate(sample_exercises):
-            ex = LoggedExercise(exercise_name=name, category=cat, order_index=idx)
-            for s_idx in range(1, set_count + 1):
+        for idx, source_exercise in enumerate(request.exercises):
+            ex = LoggedExercise(exercise_name=source_exercise.name, category=source_exercise.category, order_index=idx)
+            for s_idx, source_set in enumerate(source_exercise.sets, start=1):
                 ex.sets.append(
                     LoggedSet(
                         set_number=s_idx,
-                        weight_kg=default_w,
-                        target_reps=default_reps,
+                        weight_kg=source_set.weight,
+                        target_reps=source_set.target_reps,
                         completed_reps=0,
                         is_completed=False,
                     )

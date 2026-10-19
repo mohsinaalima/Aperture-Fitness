@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func
 from models.exercise import Exercise
@@ -51,3 +51,15 @@ class ExerciseRepository:
                 )
                 self.db.add(exercise)
             await self.db.commit()
+
+    async def create_exercise(self, data) -> Exercise:
+        exercise = Exercise(
+            name=data.name,
+            category=data.category,
+            primary_muscle=data.primary_muscle,
+            equipment=data.equipment,
+        )
+        self.db.add(exercise)
+        await self.db.commit()
+        await self.db.refresh(exercise)
+        return exercise

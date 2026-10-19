@@ -1,9 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy import DateTime
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-
-class Base(DeclarativeBase):
-    pass
+from sqlalchemy.orm import Mapped, mapped_column
+from core.database import Base
 
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(

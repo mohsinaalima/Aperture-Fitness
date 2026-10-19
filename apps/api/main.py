@@ -1,9 +1,7 @@
-from contextlib import asynccontextmanager
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
-from core.database import engine, Base
 from routers import (
     about,
     analytics,
@@ -15,16 +13,10 @@ from routers import (
     pricing,
     profile,
     trainer,
+    onboarding,
     users,
     workout_logger,
 )
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
 
 
 app = FastAPI(
@@ -32,16 +24,16 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan,
 )
 
-origins = [
-    settings.FRONTEND_URL,
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+origins = [settings.FRONTEND_URL.rstrip("/")]
+if settings.ENVIRONMENT == "development":
+    origins.extend([
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ])
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,8 +43,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def validate_browser_origin(request, call_next):
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        origin = request.headers.get("origin")
+        trusted_origins = {settings.FRONTEND_URL.rstrip("/")}
+        if settings.ENVIRONMENT == "development":
+            trusted_origins.update({
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+            })
+        if not origin or origin.rstrip("/") not in trusted_origins:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=403, content={"detail": "Request origin is not allowed."})
+    return await call_next(request)
+
 # Core Routers
 app.include_router(auth.router)
+app.include_router(onboarding.router)
 app.include_router(users.router)
 app.include_router(profile.router)
 app.include_router(trainer.router)

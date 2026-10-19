@@ -4,6 +4,8 @@ from core.database import get_db
 from repositories.user_profile_repository import UserProfileRepository
 from services.user_profile_service import UserProfileService
 from schemas.user_profile import ProfileResponse, UpdatePreferencesRequest
+from dependencies.auth import get_current_active_user
+from models.user import User
 
 router = APIRouter(prefix="/api/profile", tags=["User Profile"])
 
@@ -16,23 +18,25 @@ def get_service(db: AsyncSession = Depends(get_db)) -> UserProfileService:
 @router.get("", response_model=ProfileResponse, status_code=status.HTTP_200_OK)
 async def get_user_profile(
     service: UserProfileService = Depends(get_service),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Fetch current logged in user profile, system preferences, and subscription status.
     """
-    return await service.get_profile()
+    return await service.get_profile(current_user)
 
 
 @router.patch("/preferences", response_model=ProfileResponse, status_code=status.HTTP_200_OK)
 async def update_user_preferences(
     body: UpdatePreferencesRequest,
     service: UserProfileService = Depends(get_service),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Update system unit preference (Metric vs Imperial) and default rest timer.
     """
     try:
-        return await service.update_preferences(body)
+        return await service.update_preferences(body, current_user)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

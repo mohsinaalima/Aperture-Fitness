@@ -13,6 +13,10 @@ class UserProfileRepository:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_by_email(self, email: str) -> Optional[UserProfile]:
+        result = await self.db.execute(select(UserProfile).where(UserProfile.email == email))
+        return result.scalar_one_or_none()
+
     async def get_first_user(self) -> Optional[UserProfile]:
         """Utility method to get default user for single-user dev context"""
         stmt = select(UserProfile).limit(1)

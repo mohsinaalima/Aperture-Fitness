@@ -1,6 +1,7 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, Integer, JSON, ForeignKey, DateTime, func
-from sqlalchemy.orm import relationship
+from typing import Optional
+from sqlalchemy import Column, String, Boolean, Integer, JSON, ForeignKey, DateTime, func, Uuid
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from models.base import Base
 
 
@@ -8,7 +9,7 @@ class WorkoutPlan(Base):
     __tablename__ = "workout_plans"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String, ForeignKey("users.id"), nullable=True)  # Set nullable=False if auth required
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     focus = Column(String, default="Custom Split")

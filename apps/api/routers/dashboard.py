@@ -16,4 +16,4 @@ async def get_dashboard_data(
 ):
     repo = DashboardRepository(db)
     service = DashboardService(repo)
-    return await service.get_dashboard_summary(user_id=current_user.id)
+    return await service.get_dashboard_summary(user_id=str(current_user.id))

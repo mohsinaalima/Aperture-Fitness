@@ -2,9 +2,9 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 class InviteTrainerRequest(BaseModel):
-    name: str = Field(..., min_length=2, example="Marcus Vance")
-    specialization: str = Field(..., example="Hypertrophy & Power")
-    monthly_revenue: float = Field(0.0, ge=0.0, example=2400.0)
+    name: str = Field(..., min_length=2)
+    specialization: str
+    monthly_revenue: float = Field(0.0, ge=0.0)
 
 class TrainerRosterItem(BaseModel):
     id: str

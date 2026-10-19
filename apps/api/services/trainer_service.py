@@ -5,13 +5,10 @@ from typing import List, Optional
 from sqlalchemy import String, Integer, DateTime, Enum as SQLEnum
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
+from models.base import Base
 
-from apps.api.schemas.trainer import ClientCreate, ClientUpdate, StatusEnum
-
-
-class Base(DeclarativeBase):
-    pass
+from schemas.trainer import ClientCreate, ClientUpdate, StatusEnum
 
 
 class ClientModel(Base):
@@ -60,7 +57,6 @@ class TrainerService:
         await db.commit()
         await db.refresh(db_client)
         return db_client
-
     @staticmethod
     async def update_client(
         db: AsyncSession, db_client: ClientModel, client_in: ClientUpdate
@@ -71,41 +67,3 @@ class TrainerService:
         await db.commit()
         await db.refresh(db_client)
         return db_client
-
-    @staticmethod
-    async def seed_initial_roster(db: AsyncSession) -> None:
-        existing = await TrainerService.get_clients(db)
-        if existing:
-            return
-
-        initial_clients = [
-            ClientModel(
-                id="cl-1",
-                name="Alex Foster",
-                assigned_plan="Hypertrophy Block A",
-                last_active="Today 08:30 AM",
-                compliance=92,
-                status=StatusEnum.ON_TRACK,
-                recent_pr="Squat 142.5kg x 5",
-            ),
-            ClientModel(
-                id="cl-2",
-                name="Sarah Jenkins",
-                assigned_plan="Strength Peaking Phase 1",
-                last_active="Yesterday",
-                compliance=85,
-                status=StatusEnum.ON_TRACK,
-                recent_pr="Bench 80kg x 3",
-            ),
-            ClientModel(
-                id="cl-3",
-                name="Jordan Lee",
-                assigned_plan="Engine & Capacity Deload",
-                last_active="4 days ago",
-                compliance=60,
-                status=StatusEnum.NEEDS_REVIEW,
-                recent_pr="Deadlift 180kg x 1",
-            ),
-        ]
-        db.add_all(initial_clients)
-        await db.commit()
