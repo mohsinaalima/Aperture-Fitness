@@ -5,20 +5,11 @@ import { WifiOff } from "lucide-react";
 import { useWorkoutStore } from "@/store/workout-store";
 
 export const OfflineBanner: React.FC = () => {
-  const { isOffline, setOfflineStatus, syncQueue, clearSyncQueue } = useWorkoutStore();
+  const isOffline = useWorkoutStore((state) => state.isOffline);
+  const setOfflineStatus = useWorkoutStore((state) => state.setOfflineStatus);
 
   useEffect(() => {
-    const handleOnline = () => {
-      setOfflineStatus(false);
-      if (syncQueue.length > 0) {
-        console.log(`[Sync Engine] Reconnected. Flushing ${syncQueue.length} offline actions to server...`);
-        // Simulate background sync dispatch
-        setTimeout(() => {
-          clearSyncQueue();
-        }, 1500);
-      }
-    };
-
+    const handleOnline = () => setOfflineStatus(false);
     const handleOffline = () => {
       setOfflineStatus(true);
     };
@@ -32,18 +23,16 @@ export const OfflineBanner: React.FC = () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [setOfflineStatus, syncQueue, clearSyncQueue]);
+  }, [setOfflineStatus]);
 
-  if (!isOffline && syncQueue.length === 0) return null;
+  if (!isOffline) return null;
 
   return (
     <aside aria-label="Connection Status" className="fixed top-0 left-0 right-0 z-50 bg-[var(--color-warning)] text-[#0E1113] text-[12px] font-mono font-semibold py-1 px-4 flex items-center justify-between shadow-sm">
       <div className="flex items-center gap-2 mx-auto">
         <WifiOff className="h-3.5 w-3.5 stroke-[2]" />
         <span>
-          {isOffline
-            ? "OFFLINE — Changes will sync locally via IndexedDB"
-            : `SYNCING — Uploading ${syncQueue.length} offline actions...`}
+          OFFLINE — Workout changes are saved on this device until you reconnect.
         </span>
       </div>
     </aside>

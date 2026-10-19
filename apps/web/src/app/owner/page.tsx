@@ -1,78 +1,77 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { 
-  Users, 
-  UserCheck, 
-  DollarSign, 
-  UserPlus, 
-  Building2, 
+  UserPlus,
   Search, 
   CheckCircle2, 
-  Clock, 
-  AlertCircle 
+  Clock,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { ApertureIrisProgress } from "@/components/ui/aperture-iris";
+import { Card } from "@/components/ui/card";
+import { fetchApi } from "@/lib/api";
 
-// Sample Data: Trainer Roster with Attendance & Fee Compliance
-const TRAINERS_ROSTER = [
-  {
-    id: "tr-1",
-    name: "Marcus Vance",
-    specialization: "Hypertrophy & Power",
-    presentToday: true,
-    checkInTime: "06:15 AM",
-    assignedClients: 24,
-    feeStatus: "Paid",
-    monthlyRevenue: "$2,400",
-  },
-  {
-    id: "tr-2",
-    name: "Elena Rostova",
-    specialization: "Strength & Conditioning",
-    presentToday: true,
-    checkInTime: "07:30 AM",
-    assignedClients: 19,
-    feeStatus: "Paid",
-    monthlyRevenue: "$1,900",
-  },
-  {
-    id: "tr-3",
-    name: "David Chen",
-    specialization: "Olympic Weightlifting",
-    presentToday: false,
-    checkInTime: "—",
-    assignedClients: 15,
-    feeStatus: "Pending",
-    monthlyRevenue: "$1,500",
-  },
-  {
-    id: "tr-4",
-    name: "Sarah Miller",
-    specialization: "Endurance & GPP",
-    presentToday: true,
-    checkInTime: "08:00 AM",
-    assignedClients: 28,
-    feeStatus: "Paid",
-    monthlyRevenue: "$2,800",
-  },
-];
+type TrainerRosterItem = {
+  id: string;
+  name: string;
+  specialization: string;
+  presentToday: boolean;
+  checkInTime: string;
+  assignedClients: number;
+  feeStatus: string;
+  monthlyRevenue: string;
+};
 
 export default function OwnerDashboardPage() {
   const [search, setSearch] = useState("");
+  const [trainers, setTrainers] = useState<TrainerRosterItem[]>([]);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"trainer" | "staff">("trainer");
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [isInviting, setIsInviting] = useState(false);
 
-  const filteredTrainers = TRAINERS_ROSTER.filter(
+  useEffect(() => {
+    let active = true;
+    fetchApi<{ roster: TrainerRosterItem[] }>("/api/owner/dashboard")
+      .then(({ roster }) => { if (active) setTrainers(roster); })
+      .catch((error: unknown) => {
+        if (active) console.error("Could not load owner dashboard:", error);
+      });
+    return () => { active = false; };
+  }, []);
+
+  const filteredTrainers = trainers.filter(
     (t) =>
       t.name.toLowerCase().includes(search.toLowerCase()) ||
       t.specialization.toLowerCase().includes(search.toLowerCase())
   );
 
-  const totalTrainers = TRAINERS_ROSTER.length;
-  const presentToday = TRAINERS_ROSTER.filter((t) => t.presentToday).length;
-  const paidCount = TRAINERS_ROSTER.filter((t) => t.feeStatus === "Paid").length;
+  const totalTrainers = trainers.length;
+  const presentToday = trainers.filter((t) => t.presentToday).length;
+  const paidCount = trainers.filter((t) => t.feeStatus === "Paid").length;
+  const totalManagedMembers = trainers.reduce((sum, trainer) => sum + trainer.assignedClients, 0);
+
+  const handleInviteTrainer = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setInviteError(null);
+    setIsInviting(true);
+    try {
+      await fetchApi("/api/onboarding/gym/invitations", {
+        method: "POST",
+        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
+      });
+      const dashboard = await fetchApi<{ roster: TrainerRosterItem[] }>("/api/owner/dashboard");
+      setTrainers(dashboard.roster);
+      setInviteEmail("");
+      setIsInviteOpen(false);
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : "Could not invite trainer. Please try again.");
+    } finally {
+      setIsInviting(false);
+    }
+  };
 
   return (
     <AppShell>
@@ -88,9 +87,9 @@ export default function OwnerDashboardPage() {
             </h1>
           </div>
 
-          <Button className="gap-2 text-[13px]">
+          <Button className="gap-2 text-[13px]" onClick={() => { setInviteError(null); setIsInviteOpen(true); }}>
             <UserPlus className="h-4 w-4" />
-            <span>Invite Trainer</span>
+            <span>Invite Trainer or Staff</span>
           </Button>
         </div>
 
@@ -123,7 +122,7 @@ export default function OwnerDashboardPage() {
               </span>
             </div>
             <p className="text-[12px] text-[var(--color-accent-primary)] pt-1 font-medium">
-              75% Check-in rate
+              {totalTrainers ? Math.round((presentToday / totalTrainers) * 100) : 0}% Check-in rate
             </p>
           </Card>
 
@@ -141,7 +140,7 @@ export default function OwnerDashboardPage() {
               </span>
             </div>
             <p className="text-[12px] text-[var(--color-warning)] pt-1 font-medium">
-              1 Pending Invoice
+              {totalTrainers - paidCount} Pending Invoice{totalTrainers - paidCount === 1 ? "" : "s"}
             </p>
           </Card>
 
@@ -151,10 +150,10 @@ export default function OwnerDashboardPage() {
               Managed Members
             </span>
             <div className="tabular-nums text-[36px] font-medium font-mono text-[var(--color-text-primary)] leading-none pt-1">
-              86
+              {totalManagedMembers}
             </div>
             <p className="text-[12px] text-[var(--color-text-secondary)] pt-1">
-              Across all 4 trainers
+              Across all {totalTrainers} trainers
             </p>
           </Card>
         </div>
@@ -235,6 +234,21 @@ export default function OwnerDashboardPage() {
           </div>
         </Card>
       </div>
+      {isInviteOpen && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-[#0e1113]/80 p-4 backdrop-blur-sm'>
+          <form onSubmit={handleInviteTrainer} className='w-full max-w-[420px] space-y-4 rounded-md border border-[var(--color-border-default)] bg-[var(--color-surface-elevated)] p-5'>
+            <div className='flex items-center justify-between border-b border-[var(--color-border-default)] pb-3'>
+              <h2 className='font-display text-[20px] font-semibold'>Invite a trainer or staff member</h2>
+              <button type='button' aria-label='Close invitation form' onClick={() => setIsInviteOpen(false)} className='text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'>×</button>
+            </div>
+            <p className='text-[13px] text-[var(--color-text-secondary)]'>The person must already have an Aperture account to receive this in-app invitation.</p>
+            <label className='block space-y-1.5 text-[12px] font-mono uppercase text-[var(--color-text-secondary)]'>Account email<input required type='email' value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} className='w-full rounded-sm border border-[var(--color-border-default)] bg-[var(--color-bg-secondary)] px-3 py-2.5 font-body text-[14px] normal-case text-[var(--color-text-primary)] focus:border-[var(--color-accent-primary)] focus:outline-none' /></label>
+            <label className='block space-y-1.5 text-[12px] font-mono uppercase text-[var(--color-text-secondary)]'>Gym role<select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as "trainer" | "staff")} className='w-full rounded-sm border border-[var(--color-border-default)] bg-[var(--color-bg-secondary)] px-3 py-2.5 font-body text-[14px] normal-case text-[var(--color-text-primary)]'><option value='trainer'>Trainer</option><option value='staff'>Staff</option></select></label>
+            {inviteError && <p role='alert' className='text-[13px] text-[var(--color-error)]'>{inviteError}</p>}
+            <Button type='submit' disabled={isInviting} className='w-full'>{isInviting ? "Sending invitation…" : "Send invitation"}</Button>
+          </form>
+        </div>
+      )}
     </AppShell>
   );
 }

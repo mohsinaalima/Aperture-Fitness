@@ -11,6 +11,7 @@ import { ApertureIrisProgress } from "@/components/ui/aperture-iris";
 import { useAppStore } from "@/store/app-store";
 import { PlateCalculatorModal } from "@/components/ui/plate-calculator-modal";
 import { WarmupCalculatorModal } from "@/components/ui/warmup-calculator-modal";
+import { fetchApi } from "@/lib/api";
 
 export default function WorkoutLoggerPage() {
   const {
@@ -23,10 +24,38 @@ export default function WorkoutLoggerPage() {
 
   const [activeExIndex, setActiveExIndex] = useState(0);
   const [activeSetIndex, setActiveSetIndex] = useState(0);
-  const [weight, setWeight] = useState(80);
-  const [reps, setReps] = useState(8);
+  const [weightOverride, setWeightOverride] = useState<number | null>(null);
+  const [repsOverride, setRepsOverride] = useState<number | null>(null);
   const [isPlateCalcOpen, setIsPlateCalcOpen] = useState(false);
   const [isWarmupCalcOpen, setIsWarmupCalcOpen] = useState(false);
+  const selectedSet = activeWorkout?.exercises[activeExIndex]?.sets[activeSetIndex];
+  const weight = weightOverride ?? selectedSet?.weight ?? 80;
+  const reps = repsOverride ?? selectedSet?.targetReps ?? 8;
+
+  const startSession = async (planId: string, dayId: string) => {
+    const plan = plans.find((item) => item.id === planId);
+    const day = plan?.days.find((item) => item.id === dayId);
+    if (!plan || !day) return;
+    await fetchApi("/workout-logger/start", {
+      method: "POST",
+      body: JSON.stringify({
+        plan_id: plan.id,
+        day_id: day.id,
+        day_name: day.name,
+        exercises: day.exercises.map((exercise) => ({
+          name: exercise.name,
+          category: exercise.category,
+          sets: exercise.sets.map((set) => ({ weight: set.weight, target_reps: set.targetReps })),
+        })),
+      }),
+    });
+    startWorkoutSession(planId, dayId);
+  };
+
+  const finishSession = async () => {
+    await fetchApi("/workout-logger/finish", { method: "POST" });
+    finishWorkoutSession();
+  };
 
   if (!activeWorkout) {
     const activePlan = plans.find((p) => p.isActive) || plans[0];
@@ -60,7 +89,7 @@ export default function WorkoutLoggerPage() {
                 {activePlan.days.map((day) => (
                   <button
                     key={day.id}
-                    onClick={() => startWorkoutSession(activePlan.id, day.id)}
+                    onClick={() => { void startSession(activePlan.id, day.id).catch((error: unknown) => window.alert(error instanceof Error ? error.message : "Could not start workout.")); }}
                     className='w-full flex items-center justify-between p-3.5 rounded-sm bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] hover:border-[var(--color-accent-primary)] transition-colors text-left cursor-pointer group'
                   >
                     <div>
@@ -98,15 +127,36 @@ export default function WorkoutLoggerPage() {
   const currentExercise = activeWorkout.exercises[activeExIndex];
   const currentSet = currentExercise?.sets[activeSetIndex];
 
-  const handleToggleSet = () => {
+  if (!currentExercise) {
+    return (
+      <AppShell>
+        <Card className='mx-auto max-w-[480px] space-y-4 p-6 text-center'>
+          <h1 className='font-display text-[24px] font-semibold'>This session has no exercises yet</h1>
+          <p className='text-[14px] text-[var(--color-text-secondary)]'>Add exercises to this training day before starting your workout.</p>
+          <Link href='/plans/builder'><Button className='w-full'>Open plan builder</Button></Link>
+          <Button variant='secondary' className='w-full' onClick={() => { void finishSession().catch((error: unknown) => window.alert(error instanceof Error ? error.message : "Could not finish workout.")); }}>End empty session</Button>
+        </Card>
+      </AppShell>
+    );
+  }
+
+  const handleToggleSet = async () => {
     if (!currentExercise || !currentSet) return;
+    await fetchApi("/workout-logger/toggle-set", {
+      method: "POST",
+      body: JSON.stringify({ exercise_index: activeExIndex, set_index: activeSetIndex, weight_kg: weight, completed_reps: reps }),
+    });
     toggleSetCompletion(activeExIndex, activeSetIndex, weight, reps);
 
     if (activeSetIndex < currentExercise.sets.length - 1) {
       setActiveSetIndex(activeSetIndex + 1);
+      setWeightOverride(null);
+      setRepsOverride(null);
     } else if (activeExIndex < activeWorkout.exercises.length - 1) {
       setActiveExIndex(activeExIndex + 1);
       setActiveSetIndex(0);
+      setWeightOverride(null);
+      setRepsOverride(null);
     }
   };
 
@@ -121,7 +171,7 @@ export default function WorkoutLoggerPage() {
           <Button
             variant='secondary'
             size='default'
-            onClick={finishWorkoutSession}
+            onClick={() => { void finishSession().catch((error: unknown) => window.alert(error instanceof Error ? error.message : "Could not finish workout.")); }}
             className='text-[12px] font-mono text-[var(--color-accent-primary)] border-[var(--color-accent-primary)]/40'
           >
             Finish Workout
@@ -169,8 +219,8 @@ export default function WorkoutLoggerPage() {
                 key={set.id}
                 onClick={() => {
                   setActiveSetIndex(idx);
-                  setWeight(set.weight);
-                  setReps(set.targetReps);
+                  setWeightOverride(null);
+                  setRepsOverride(null);
                 }}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-sm border text-[13px] font-mono transition-all cursor-pointer ${
                   isActive
@@ -195,14 +245,14 @@ export default function WorkoutLoggerPage() {
           <NumericStepper
             label='Load Weight'
             value={weight}
-            onChange={setWeight}
+            onChange={setWeightOverride}
             step={2.5}
             unit='kg'
           />
           <NumericStepper
             label='Target Repetitions'
             value={reps}
-            onChange={setReps}
+            onChange={setRepsOverride}
             step={1}
             unit='reps'
           />
@@ -229,6 +279,8 @@ export default function WorkoutLoggerPage() {
             onClick={() => {
               setActiveExIndex(activeExIndex - 1);
               setActiveSetIndex(0);
+              setWeightOverride(null);
+              setRepsOverride(null);
             }}
             className='text-[13px] font-mono text-[var(--color-text-secondary)] disabled:opacity-30 cursor-pointer'
           >
@@ -239,6 +291,8 @@ export default function WorkoutLoggerPage() {
             onClick={() => {
               setActiveExIndex(activeExIndex + 1);
               setActiveSetIndex(0);
+              setWeightOverride(null);
+              setRepsOverride(null);
             }}
             className='text-[13px] font-mono text-[var(--color-accent-primary)] disabled:opacity-30 cursor-pointer'
           >

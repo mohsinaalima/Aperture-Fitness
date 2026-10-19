@@ -3,7 +3,7 @@ import { AuthProvider } from "@/context/auth-context";
 
 export const metadata = {
   title: "Aperture Fitness",
-  description: "Precision strength training instrument",
+  description: "Plan your strength training, log every set, and track your progress with Aperture Fitness.",
 };
 
 export default function RootLayout({

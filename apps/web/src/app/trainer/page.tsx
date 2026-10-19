@@ -1,20 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  Users,
-  MessageSquare,
   Calendar,
-  PlusCircle,
-  CheckCircle2,
-  Clock,
   X,
-  ChevronRight,
+  UserPlus,
 } from "lucide-react";
+import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
+import { fetchApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ApertureIrisProgress } from "@/components/ui/aperture-iris";
+import { useAppStore } from "@/store/app-store";
 
 interface Client {
   id: string;
@@ -23,44 +21,69 @@ interface Client {
   lastActive: string;
   compliance: number;
   status: "On Track" | "Needs Review";
-  recentPR: string;
+  recentPR: string | null;
 }
 
-const CLIENT_ROSTER: Client[] = [
-  {
-    id: "cl-1",
-    name: "Alex Foster",
-    assignedPlan: "Hypertrophy Block A",
-    lastActive: "Today 08:30 AM",
-    compliance: 92,
-    status: "On Track",
-    recentPR: "Squat 142.5kg x 5",
-  },
-  {
-    id: "cl-2",
-    name: "Sarah Jenkins",
-    assignedPlan: "Strength Peaking Phase 1",
-    lastActive: "Yesterday",
-    compliance: 85,
-    status: "On Track",
-    recentPR: "Bench 80kg x 3",
-  },
-  {
-    id: "cl-3",
-    name: "Jordan Lee",
-    assignedPlan: "Engine & Capacity Deload",
-    lastActive: "4 days ago",
-    compliance: 60,
-    status: "Needs Review",
-    recentPR: "Deadlift 180kg x 1",
-  },
-];
-
 export default function TrainerDashboardPage() {
-  const [selectedClient, setSelectedClient] = useState<Client>(
-    CLIENT_ROSTER[0],
-  );
+  const plans = useAppStore((state) => state.plans);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+  const [isAssignOpen, setIsAssignOpen] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState(plans[0]?.id || "");
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteSent, setInviteSent] = useState(false);
+  const [isInviting, setIsInviting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetchApi<Client[]>("/trainer/clients")
+      .then((roster) => {
+        if (!active) return;
+        setClients(roster);
+        setSelectedClient(roster[0] ?? null);
+      })
+      .catch((error: unknown) => {
+        if (active) setAssignError(error instanceof Error ? error.message : "Could not load trainer clients.");
+      });
+    return () => { active = false; };
+  }, []);
+
+  const assignPlan = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const plan = plans.find((item) => item.id === selectedPlanId);
+    const client = selectedClient;
+    if (!plan || !client) return;
+    setAssignError(null);
+    try {
+      const updatedClient = await fetchApi<Client>(`/trainer/clients/${encodeURIComponent(client.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ assignedPlan: plan.name }),
+      });
+      setSelectedClient(updatedClient);
+      setClients((current) => current.map((client) => client.id === updatedClient.id ? updatedClient : client));
+      setIsAssignOpen(false);
+    } catch (error) {
+      setAssignError(error instanceof Error ? error.message : "Could not assign this plan.");
+    }
+  };
+
+  const inviteClient = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setInviteError(null); setIsInviting(true);
+    try {
+      await fetchApi("/api/onboarding/trainer/invitations", {
+        method: "POST",
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      setInviteSent(true);
+      setInviteEmail("");
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : "Could not send this invitation.");
+    } finally { setIsInviting(false); }
+  };
 
   return (
     <AppShell>
@@ -81,11 +104,12 @@ export default function TrainerDashboardPage() {
           <div className='lg:col-span-2'>
             <Card className='p-0 overflow-hidden'>
               <div className='p-4 border-b border-[var(--color-border-default)] bg-[var(--color-bg-secondary)] flex items-center justify-between'>
-                <h2 className='font-display text-[18px] font-semibold'>
-                  Client Roster
-                </h2>
+                <div className="flex items-center gap-3">
+                  <h2 className='font-display text-[18px] font-semibold'>Client Roster</h2>
+                  <Button variant="secondary" onClick={() => { setInviteError(null); setInviteSent(false); setIsInviteOpen(true); }}><UserPlus className="mr-1 h-4 w-4" />Invite client</Button>
+                </div>
                 <span className='tabular-nums text-[12px] font-mono text-[var(--color-text-muted)]'>
-                  3 Active Clients
+                  {clients.length} Active Clients
                 </span>
               </div>
 
@@ -100,8 +124,8 @@ export default function TrainerDashboardPage() {
                     </tr>
                   </thead>
                   <tbody className='divide-y divide-[var(--color-border-default)]'>
-                    {CLIENT_ROSTER.map((client) => {
-                      const isSelected = selectedClient.id === client.id;
+                    {clients.map((client) => {
+                      const isSelected = selectedClient?.id === client.id;
                       return (
                         <tr
                           key={client.id}
@@ -109,6 +133,15 @@ export default function TrainerDashboardPage() {
                             setSelectedClient(client);
                             setIsDrawerOpen(true);
                           }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setSelectedClient(client);
+                              setIsDrawerOpen(true);
+                            }
+                          }}
+                          tabIndex={0}
+                          aria-selected={isSelected}
                           className={`cursor-pointer transition-colors ${
                             isSelected
                               ? "bg-[var(--color-accent-subtle)]"
@@ -141,6 +174,7 @@ export default function TrainerDashboardPage() {
                   </tbody>
                 </table>
               </div>
+              {clients.length === 0 && <p className='p-6 text-center text-[13px] text-[var(--color-text-secondary)]'>No clients have been added yet.</p>}
             </Card>
           </div>
 
@@ -204,17 +238,15 @@ export default function TrainerDashboardPage() {
 
                   {/* Primary Drawer Actions (Section 14 & 18.14) */}
                   <div className='pt-2 space-y-2'>
-                    <Button className='w-full gap-2 text-[13px]'>
-                      <MessageSquare className='h-4 w-4' />
-                      <span>Message Client</span>
-                    </Button>
                     <Button
                       variant='secondary'
                       className='w-full gap-2 text-[13px]'
+                      onClick={() => { setSelectedPlanId(plans[0]?.id || ""); setAssignError(null); setIsAssignOpen(true); }}
                     >
                       <Calendar className='h-4 w-4' />
                       <span>Assign Plan</span>
                     </Button>
+                    <Link href='/plans/builder' className='block text-center text-[12px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'>Manage training plans</Link>
                   </div>
                 </CardContent>
               </Card>
@@ -222,6 +254,29 @@ export default function TrainerDashboardPage() {
           </div>
         </div>
       </div>
+      {isAssignOpen && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-[#0e1113]/80 p-4 backdrop-blur-sm'>
+          <form onSubmit={assignPlan} className='w-full max-w-[420px] space-y-4 rounded-md border border-[var(--color-border-default)] bg-[var(--color-surface-elevated)] p-5'>
+            <div className='flex items-center justify-between border-b border-[var(--color-border-default)] pb-3'><h2 className='font-display text-[20px] font-semibold'>Assign a plan</h2><button type='button' aria-label='Close plan assignment' onClick={() => setIsAssignOpen(false)} className='text-[var(--color-text-muted)] hover:text-white'>×</button></div>
+            <p className='text-[13px] text-[var(--color-text-secondary)]'>Choose a training plan for {selectedClient?.name}.</p>
+            <label className='block space-y-1.5 text-[12px] font-mono uppercase text-[var(--color-text-secondary)]'>Training plan<select required value={selectedPlanId} onChange={(event) => setSelectedPlanId(event.target.value)} className='w-full rounded-sm border border-[var(--color-border-default)] bg-[var(--color-bg-secondary)] px-3 py-2.5 font-body text-[14px] normal-case text-[var(--color-text-primary)]'>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
+            {assignError && <p role='alert' className='text-[13px] text-[var(--color-error)]'>{assignError}</p>}
+            <Button type='submit' disabled={plans.length === 0} className='w-full'>Assign plan</Button>
+          </form>
+        </div>
+      )}
+      {isInviteOpen && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-[#0e1113]/80 p-4 backdrop-blur-sm'>
+          <form onSubmit={inviteClient} className='w-full max-w-[420px] space-y-4 rounded-md border border-[var(--color-border-default)] bg-[var(--color-surface-elevated)] p-5'>
+            <div className='flex items-center justify-between border-b border-[var(--color-border-default)] pb-3'><h2 className='font-display text-[20px] font-semibold'>Invite a client</h2><button type='button' aria-label='Close invitation form' onClick={() => setIsInviteOpen(false)} className='text-[var(--color-text-muted)] hover:text-white'>×</button></div>
+            <p className='text-[13px] text-[var(--color-text-secondary)]'>The client needs an Aperture account. Their access starts only after they accept.</p>
+            <label className='block space-y-1.5 text-[12px] font-mono uppercase text-[var(--color-text-secondary)]'>Client account email<input required type='email' value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} className='w-full rounded-sm border border-[var(--color-border-default)] bg-[var(--color-bg-secondary)] px-3 py-2.5 font-body text-[14px] normal-case text-[var(--color-text-primary)]' /></label>
+            {inviteError && <p role='alert' className='text-[13px] text-[var(--color-error)]'>{inviteError}</p>}
+            {inviteSent && <p role='status' className='text-[13px] text-[var(--color-accent-primary)]'>Invitation sent. The client will appear after accepting it.</p>}
+            <Button type='submit' disabled={isInviting} className='w-full'>{isInviting ? "Sending invitation…" : "Send invitation"}</Button>
+          </form>
+        </div>
+      )}
     </AppShell>
   );
 }

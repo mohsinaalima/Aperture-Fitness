@@ -1,18 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
-import { 
-  Trophy, 
-  TrendingUp, 
-  Calendar, 
-  Filter, 
-  ChevronDown, 
-  Sparkles 
-} from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Filter } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ApertureIrisProgress } from "@/components/ui/aperture-iris";
+import { fetchApi } from "@/lib/api";
+
+interface AnalyticsData {
+  exercise_name: string;
+  current_e1rm: number;
+  consistency_score: number;
+  volume_data: typeof VOLUME_DATA;
+  strength_data: typeof STRENGTH_DATA;
+  pr_history: typeof PR_HISTORY;
+}
 
 // Sample Datasets (Instrument Graphite single-series rules)
 const VOLUME_DATA = [
@@ -44,6 +46,37 @@ const PR_HISTORY = [
 export default function AnalyticsPage() {
   const [selectedExercise, setSelectedExercise] = useState("Barbell Bench Press");
   const [timeframe, setTimeframe] = useState("12 Weeks");
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+    const query = new URLSearchParams({ exercise: selectedExercise, timeframe });
+    fetchApi<AnalyticsData>(`/analytics?${query.toString()}`)
+      .then((data) => { if (isCurrent) { setAnalytics(data); setAnalyticsError(null); } })
+      .catch((error: unknown) => { if (isCurrent) setAnalyticsError(error instanceof Error ? error.message : "Analytics could not be loaded."); });
+    return () => { isCurrent = false; };
+  }, [selectedExercise, timeframe]);
+
+  const strengthData = analytics?.strength_data ?? STRENGTH_DATA;
+  const allVolumeData = analytics?.volume_data ?? VOLUME_DATA;
+  const volumeLimit = timeframe === "4 Weeks" ? 4 : timeframe === "12 Weeks" ? 12 : timeframe === "6 Months" ? 26 : allVolumeData.length;
+  const volumeData = allVolumeData.slice(-volumeLimit);
+  const personalRecords = analytics?.pr_history ?? PR_HISTORY;
+  const currentE1rm = analytics?.current_e1rm ?? strengthData.at(-1)?.e1rm ?? 0;
+  const consistencyScore = analytics?.consistency_score ?? 92;
+  const latestVolume = volumeData.at(-1)?.volume ?? 0;
+  const priorVolumes = volumeData.slice(0, -1).map((point) => point.volume);
+  const averagePriorVolume = priorVolumes.length ? priorVolumes.reduce((sum, value) => sum + value, 0) / priorVolumes.length : 0;
+  const volumeChange = averagePriorVolume ? ((latestVolume - averagePriorVolume) / averagePriorVolume) * 100 : 0;
+  const chartMin = Math.min(...strengthData.map((point) => point.e1rm), currentE1rm) - 5;
+  const chartMax = Math.max(...strengthData.map((point) => point.e1rm), currentE1rm) + 5;
+  const chartPoints = strengthData.map((point, index) => ({
+    ...point,
+    x: strengthData.length < 2 ? 250 : 20 + index * (440 / (strengthData.length - 1)),
+    y: 130 - ((point.e1rm - chartMin) / Math.max(1, chartMax - chartMin)) * 100,
+  }));
+  const chartPath = chartPoints.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
 
   return (
     <AppShell>
@@ -67,6 +100,7 @@ export default function AnalyticsPage() {
                 <button
                   key={tf}
                   onClick={() => setTimeframe(tf)}
+                  aria-pressed={timeframe === tf}
                   className={`px-3 py-1 rounded-sm text-[12px] font-mono transition-colors cursor-pointer ${
                     timeframe === tf
                       ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent-primary)] font-semibold"
@@ -79,6 +113,8 @@ export default function AnalyticsPage() {
             </div>
           </div>
         </div>
+
+        {analyticsError && <p role='status' className='rounded-sm border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-3 py-2 text-[12px] text-[var(--color-warning)]'>Live analytics are unavailable. Showing sample training data.</p>}
 
         {/* Layout: Desktop Left Filter Rail + Main Analytical Cards (Section 14 & 18.10) */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -126,10 +162,10 @@ export default function AnalyticsPage() {
                 <CardTitle className="text-[15px]">Consistency Score</CardTitle>
               </CardHeader>
               <CardContent className="flex items-center gap-4">
-                <ApertureIrisProgress value={92} size={64} />
+                <ApertureIrisProgress value={consistencyScore} size={64} />
                 <div>
                   <div className="tabular-nums text-[32px] font-medium leading-none text-[var(--color-text-primary)]">
-                    92%
+                    {consistencyScore}%
                   </div>
                   <span className="text-[12px] text-[var(--color-accent-primary)] font-medium mt-1 inline-block">
                     High Adherence
@@ -149,12 +185,12 @@ export default function AnalyticsPage() {
                     Strength Progression ({selectedExercise})
                   </CardTitle>
                   <p className="text-[13px] text-[var(--color-text-secondary)] mt-0.5">
-                    Question: Is top-set estimated 1RM trending up?
+                    Estimated 1RM by training history
                   </p>
                 </div>
                 <div className="text-right">
                   <span className="tabular-nums text-[24px] font-medium text-[var(--color-accent-primary)]">
-                    122.5 kg
+                    {currentE1rm.toLocaleString("en-US")} kg
                   </span>
                   <p className="text-[11px] font-mono text-[var(--color-text-muted)]">Current Est. 1RM</p>
                 </div>
@@ -171,16 +207,15 @@ export default function AnalyticsPage() {
 
                     {/* Chart Hairline Path (Default text-secondary color per Section 12) */}
                     <path
-                      d="M 20 120 L 100 105 L 180 90 L 260 90 L 340 70 L 460 30"
+                      d={chartPath}
                       fill="none"
                       stroke="var(--color-text-secondary)"
                       strokeWidth="2"
                     />
 
                     {/* Points */}
-                    {STRENGTH_DATA.map((pt, i) => {
-                      const x = 20 + i * 88;
-                      const y = 130 - (pt.e1rm - 105) * 6;
+                    {chartPoints.map((pt, i) => {
+                      const { x, y } = pt;
                       return (
                         <g key={i}>
                           <circle
@@ -208,7 +243,7 @@ export default function AnalyticsPage() {
 
                 {/* X Axis Labels */}
                 <div className="flex justify-between pt-3 border-t border-[var(--color-border-default)] mt-2">
-                  {STRENGTH_DATA.map((pt, i) => (
+                  {strengthData.map((pt, i) => (
                     <span key={i} className="text-[12px] font-mono text-[var(--color-text-muted)]">
                       {pt.month}
                     </span>
@@ -222,7 +257,7 @@ export default function AnalyticsPage() {
               {/* Volume Trend Card (Section 12.1) */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-[16px]">Volume Trend (12 Weeks)</CardTitle>
+                  <CardTitle className="text-[16px]">Volume Trend ({timeframe})</CardTitle>
                   <p className="text-[12px] text-[var(--color-text-secondary)]">
                     Total load accumulated per week
                   </p>
@@ -230,18 +265,19 @@ export default function AnalyticsPage() {
                 <CardContent className="pt-2">
                   <div className="flex items-baseline justify-between mb-4">
                     <span className="tabular-nums text-[28px] font-medium text-[var(--color-text-primary)]">
-                      31,000 kg
+                      {latestVolume.toLocaleString("en-US")} kg
                     </span>
                     <span className="text-[12px] text-[var(--color-accent-primary)] font-mono">
-                      +11.5% vs avg
+                      {volumeChange >= 0 ? "+" : ""}{volumeChange.toFixed(1)}% vs avg
                     </span>
                   </div>
 
                   {/* Hairline Bar Chart */}
                   <div className="h-[90px] flex items-end gap-2 pt-2">
-                    {VOLUME_DATA.map((v, i) => {
-                      const heightPct = (v.volume / 35000) * 100;
-                      const isLatest = i === VOLUME_DATA.length - 1;
+                    {volumeData.map((v, i) => {
+                      const maxVolume = Math.max(...volumeData.map((point) => point.volume), 1);
+                      const heightPct = (v.volume / maxVolume) * 100;
+                      const isLatest = i === volumeData.length - 1;
                       return (
                         <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
                           <div
@@ -268,7 +304,7 @@ export default function AnalyticsPage() {
                   <CardTitle className="text-[16px]">Recent Personal Records</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-2 space-y-3">
-                  {PR_HISTORY.map((pr, i) => (
+                  {personalRecords.map((pr, i) => (
                     <div
                       key={i}
                       className="p-3 rounded-sm bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] flex items-center justify-between"

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { SkipForward } from "lucide-react";
 import { useAppStore } from "@/store/app-store";
 import { ApertureIrisProgress } from "@/components/ui/aperture-iris";
@@ -8,9 +8,13 @@ import { ApertureIrisProgress } from "@/components/ui/aperture-iris";
 export const FloatingRestTimer: React.FC = () => {
   const activeWorkout = useAppStore((s) => s.activeWorkout);
   const cancelRestTimer = useAppStore((s) => s.cancelRestTimer);
-  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [clockNow, setClockNow] = useState(0);
+  const alertedTimerEnd = useRef<number | null>(null);
 
   const timerInfo = activeWorkout?.activeRestTimer;
+  const remainingSeconds = timerInfo
+    ? Math.max(0, Math.ceil((timerInfo.endTime - (clockNow || timerInfo.endTime - timerInfo.duration * 1000)) / 1000))
+    : 0;
 
   // Synthesize Web Audio Beep & Haptic Vibration on completion
   const triggerCompletionAlert = () => {
@@ -37,33 +41,25 @@ export const FloatingRestTimer: React.FC = () => {
         osc.start();
         osc.stop(ctx.currentTime + 0.3);
       }
-    } catch (e) {
-      // Audio context fallback ignored
+    } catch {
+      // Audio feedback is optional when the browser blocks Web Audio.
     }
   };
 
   useEffect(() => {
-    if (!timerInfo) {
-      setRemainingSeconds(0);
-      return;
-    }
-
-    const updateTimer = () => {
-      const diff = Math.max(
-        0,
-        Math.ceil((timerInfo.endTime - Date.now()) / 1000),
-      );
-      setRemainingSeconds(diff);
-      if (diff === 0) {
-        triggerCompletionAlert();
-        cancelRestTimer();
-      }
-    };
-
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
+    if (!timerInfo) return;
+    const interval = setInterval(() => setClockNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [timerInfo, cancelRestTimer]);
+  }, [timerInfo]);
+
+  useEffect(() => {
+    if (!timerInfo || remainingSeconds > 0) return;
+    if (alertedTimerEnd.current !== timerInfo.endTime) {
+      alertedTimerEnd.current = timerInfo.endTime;
+      triggerCompletionAlert();
+    }
+    cancelRestTimer();
+  }, [timerInfo, remainingSeconds, cancelRestTimer]);
 
   if (!timerInfo || remainingSeconds <= 0) return null;
 

@@ -1,12 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Play,
-  Trophy,
-  Target,
-  TrendingUp,
   ChevronRight,
   Clock,
   Dumbbell,
@@ -16,17 +13,37 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ApertureIrisProgress } from "@/components/ui/aperture-iris";
 import { useAppStore } from "@/store/app-store";
+import { fetchApi } from "@/lib/api";
+
+type DashboardResponse = {
+  activePlan: { name: string; days: Array<{ name: string; exercises: unknown[] }> } | null;
+  todayDaySpec: { name: string; exercises: unknown[] } | null;
+  totalMonthlyVolume: number;
+  completedSessionsCount: number;
+  lastLoggedAt: string | null;
+};
 
 export default function DashboardPage() {
   const { plans, completedSessions } = useAppStore();
+  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  useEffect(() => {
+    let active = true;
+    fetchApi<DashboardResponse>("/dashboard")
+      .then((data) => { if (active) setDashboard(data); })
+      .catch((error: unknown) => console.error("Could not load dashboard from API:", error));
+    return () => { active = false; };
+  }, []);
 
-  const activePlan = plans.find((p) => p.isActive) || plans[0];
-  const todayDaySpec = activePlan?.days[0];
+  const localPlan = plans.find((p) => p.isActive) || plans[0];
+  const activePlanName = dashboard?.activePlan?.name || localPlan?.name;
+  const todayName = dashboard?.todayDaySpec?.name || localPlan?.days[0]?.name;
+  const todayExerciseCount = dashboard?.todayDaySpec?.exercises.length ?? localPlan?.days[0]?.exercises.length ?? 0;
 
-  const totalMonthlyVolume = completedSessions.reduce(
+  const localMonthlyVolume = completedSessions.reduce(
     (sum, sess) => sum + sess.totalVolumeKg,
     0,
   );
+  const totalMonthlyVolume = dashboard?.totalMonthlyVolume ?? localMonthlyVolume;
 
   return (
     <AppShell>
@@ -38,11 +55,13 @@ export default function DashboardPage() {
               Active Program
             </span>
             <h1 className='font-display text-[32px] md:text-[36px] font-semibold leading-tight text-[var(--color-text-primary)]'>
-              {activePlan?.name || "Custom Training Spec"}
+              {activePlanName || "Custom Training Spec"}
             </h1>
           </div>
           <span className='text-[13px] text-[var(--color-text-muted)] font-mono'>
-            {completedSessions.length > 0
+            {dashboard?.lastLoggedAt
+              ? `Last logged: ${new Date(dashboard.lastLoggedAt).toLocaleDateString()}`
+              : completedSessions.length > 0
               ? `Last logged: ${new Date(
                   completedSessions[0].completedAt,
                 ).toLocaleDateString()}`
@@ -63,13 +82,13 @@ export default function DashboardPage() {
 
             <div>
               <h2 className='font-display text-[24px] md:text-[28px] font-semibold text-[var(--color-text-primary)]'>
-                {todayDaySpec?.name || "Full Body Power & Hypertrophy"}
+                {todayName || "Full Body Power & Hypertrophy"}
               </h2>
               <div className='flex items-center gap-4 mt-2 text-[13px] text-[var(--color-text-secondary)]'>
                 <span className='flex items-center gap-1.5'>
                   <Dumbbell className='h-4 w-4 text-[var(--color-text-muted)]' />
                   <strong className='tabular-nums text-[var(--color-text-primary)]'>
-                    {todayDaySpec?.exercises.length || 0}
+                    {todayExerciseCount}
                   </strong>{" "}
                   exercises
                 </span>
@@ -157,7 +176,7 @@ export default function DashboardPage() {
                     Sessions Completed
                   </span>
                   <span className='tabular-nums text-[15px] font-mono font-medium text-[var(--color-text-primary)]'>
-                    {completedSessions.length}
+                      {dashboard?.completedSessionsCount ?? completedSessions.length}
                   </span>
                 </div>
               </CardContent>

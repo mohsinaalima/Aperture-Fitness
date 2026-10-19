@@ -21,45 +21,33 @@ export const BottomNav: React.FC = () => {
   const { user } = useAuth();
 
   const getNavItems = () => {
-    if (user?.role === "owner") {
-      return [
-        { label: "Portal", href: "/owner", icon: Building2 },
-        { label: "Trainers", href: "/owner", icon: Users },
-        { label: "Analytics", href: "/analytics", icon: BarChart3 },
-        { label: "Profile", href: "/profile", icon: User },
-      ];
+    const roles = user?.roles ?? [];
+    const items = [];
+    if (roles.includes("member")) {
+      items.push(
+        { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+        { label: "Plans", href: "/plans", icon: Calendar },
+        { label: "Log", href: "/log", icon: Plus, isElevated: true },
+      );
     }
-
-    if (user?.role === "trainer") {
-      return [
-        { label: "Clients", href: "/trainer", icon: Users },
-        { label: "Builder", href: "/plans/builder", icon: Calendar },
-        { label: "Exercises", href: "/exercises", icon: Dumbbell },
-        { label: "Profile", href: "/profile", icon: User },
-      ];
-    }
-
-    return [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "Plans", href: "/plans", icon: Calendar },
-      { label: "Log", href: "/log", icon: Plus, isElevated: true },
-      { label: "Analytics", href: "/analytics", icon: BarChart3 },
-      { label: "Profile", href: "/profile", icon: User },
-    ];
+    if (roles.includes("trainer")) items.push({ label: "Clients", href: "/trainer", icon: Users });
+    if (roles.includes("owner")) items.push({ label: "Portal", href: "/owner", icon: Building2 });
+    items.push({ label: "Profile", href: "/profile", icon: User });
+    return items.slice(0, 5);
   };
 
   const navItems = getNavItems();
 
   return (
     <nav className='md:hidden fixed bottom-0 left-0 right-0 h-[64px] bg-[var(--color-bg-secondary)] border-t border-[var(--color-border-default)] flex items-center justify-around px-2 z-40 pb-[env(safe-area-inset-bottom)]'>
-      {navItems.map((item, i) => {
+      {navItems.map((item) => {
         const Icon = item.icon;
-        const isActive = pathname === item.href;
+        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
         if (item.isElevated) {
           return (
             <Link
-              key={i}
+              key={item.href}
               href={item.href}
               aria-label={item.label}
               className='flex items-center justify-center -translate-y-2'
@@ -73,7 +61,7 @@ export const BottomNav: React.FC = () => {
 
         return (
           <Link
-            key={i}
+            key={item.href}
             href={item.href}
             className={cn(
               "flex flex-col items-center justify-center h-full min-w-[56px] px-2 transition-colors",

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { X, Flame, Dumbbell } from "lucide-react";
+import { X, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface WarmupCalculatorModalProps {

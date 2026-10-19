@@ -2,6 +2,34 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@keyframes landing-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes landing-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-9px); }
+}
+
+@keyframes orbit-turn {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ticker-scroll {
+  to { transform: translateX(-50%); }
+}
+
+@keyframes bar-breathe {
+  0%, 100% { filter: brightness(.85); transform: scaleY(.88); transform-origin: bottom; }
+  50% { filter: brightness(1.25); transform: scaleY(1); transform-origin: bottom; }
+}
+
+@keyframes progress-arrive {
+  from { width: 0; }
+  to { width: 68%; }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme {
@@ -36,9 +64,9 @@
   --radius-md: 10px;
 
   /* Fonts */
-  --font-display: "Neue Montreal", sans-serif;
-  --font-body: "Inter", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+  --font-display: "Arial", "Helvetica Neue", sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 
   /* Motion */
   --ease-mechanical: cubic-bezier(0.2, 0, 0, 1);
@@ -111,24 +139,24 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --background: #0e1113;
+  --foreground: #edeff1;
+  --card: #1c2024;
+  --card-foreground: #edeff1;
+  --popover: #1c2024;
+  --popover-foreground: #edeff1;
+  --primary: #5fa88c;
+  --primary-foreground: #0e1113;
+  --secondary: #22262b;
+  --secondary-foreground: #edeff1;
+  --muted: #15181b;
+  --muted-foreground: #a7adb4;
+  --accent: #22262b;
+  --accent-foreground: #edeff1;
+  --destructive: #d0655a;
+  --border: #2a2f34;
+  --input: #2a2f34;
+  --ring: #5fa88c;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -177,4 +205,56 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+.landing-page .hero-grid {
+  isolation: isolate;
+}
+
+.landing-page .hero-grid::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0 -20vw;
+  background-image: linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, transparent, black 12%, black 72%, transparent);
+  content: "";
+}
+
+.landing-page .hero-halo {
+  background: radial-gradient(circle, rgba(95,168,140,.13), rgba(95,168,140,.035) 43%, transparent 72%);
+  animation: landing-float 8s ease-in-out infinite;
+}
+
+.landing-page .orbit-one { animation: orbit-turn 55s linear infinite; }
+.landing-page .orbit-two { animation: orbit-turn 75s linear infinite reverse; }
+.landing-page .iris-float { animation: landing-float 6s ease-in-out infinite; }
+.landing-page .float-card { animation: landing-float 5s ease-in-out infinite; }
+.landing-page .float-pr { animation-delay: -1.7s; }
+.landing-page .float-timer { animation-delay: -3.1s; }
+.landing-page .timer-ring { animation: orbit-turn 8s linear infinite; }
+.landing-page .rise-in { animation: landing-rise .75s cubic-bezier(.2,0,0,1) both; }
+.landing-page .ticker-track { animation: ticker-scroll 32s linear infinite; }
+.landing-page .chart-bar { animation: bar-breathe 2.8s ease-in-out infinite; }
+.landing-page .progress-fill { animation: progress-arrive 1.4s cubic-bezier(.2,0,0,1) both; }
+.landing-page .loop-card { animation: landing-rise .7s cubic-bezier(.2,0,0,1) both; }
+.landing-page .cta-orbit { animation: orbit-turn 90s linear infinite; }
+
+.landing-page .preview-window {
+  min-height: 174px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(95,168,140,.08), transparent 68%), #111618;
+  padding: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-page *,
+  .landing-page *::before,
+  .landing-page *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
 }
