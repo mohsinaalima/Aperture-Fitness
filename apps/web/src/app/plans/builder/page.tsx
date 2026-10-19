@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -8,7 +8,6 @@ import {
   Plus,
   Trash2,
   Clock,
-  Save,
   CheckCircle2,
   X,
   Search,
@@ -18,18 +17,17 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useAppStore, CustomExercise } from "@/store/app-store";
+import { fetchApi } from "@/lib/api";
+import { mapApiPlans, type ApiPlan } from "@/lib/plans";
 
 export default function WorkoutBuilderPage() {
   const {
     plans,
     customExercises,
-    createCustomPlan,
-    addDayToPlan,
-    addExerciseToDay,
     updateSetInPlan,
     setActivePlan,
     deletePlan,
-    addCustomExercise,
+    replacePlans,
   } = useAppStore();
 
   const [selectedPlanId, setSelectedPlanId] = useState<string>(
@@ -47,54 +45,108 @@ export default function WorkoutBuilderPage() {
   const [customExName, setCustomExName] = useState("");
   const [customExCategory, setCustomExCategory] = useState("Chest");
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [exerciseLibrary, setExerciseLibrary] = useState<CustomExercise[]>([]);
+
+  const refreshPlans = async (selectId?: string) => {
+    const data = await fetchApi<ApiPlan[]>("/api/v1/plans");
+    const mapped = mapApiPlans(data);
+    replacePlans(mapped);
+    if (selectId && mapped.some((plan) => plan.id === selectId)) setSelectedPlanId(selectId);
+    else if (!mapped.some((plan) => plan.id === selectedPlanId)) setSelectedPlanId(mapped[0]?.id || "");
+    return mapped;
+  };
+
+  useEffect(() => {
+    let active = true;
+    fetchApi<ApiPlan[]>("/api/v1/plans")
+      .then((data) => {
+        if (!active) return;
+        const mapped = mapApiPlans(data);
+        replacePlans(mapped);
+        setSelectedPlanId(mapped[0]?.id || "");
+      })
+      .catch((error: unknown) => { if (active) setApiError(error instanceof Error ? error.message : "Could not load workout plans."); });
+    return () => { active = false; };
+  }, [replacePlans]);
+
+  useEffect(() => {
+    let active = true;
+    fetchApi<{ exercises: Array<{ id: string; name: string; category: string; equipment: string; primary_muscle?: string; primaryMuscle?: string }> }>("/exercises")
+      .then(({ exercises }) => {
+        if (active) setExerciseLibrary(exercises.map((exercise) => ({ ...exercise, primaryMuscle: exercise.primary_muscle ?? exercise.primaryMuscle ?? "" })));
+      })
+      .catch((error: unknown) => { if (active) setApiError(error instanceof Error ? error.message : "Could not load exercise catalog."); });
+    return () => { active = false; };
+  }, []);
 
   const activePlan = plans.find((p) => p.id === selectedPlanId) || plans[0];
   const activeDay =
     activePlan?.days.find((d) => d.id === selectedDayId) || activePlan?.days[0];
 
-  const handleCreatePlan = () => {
+  const handleCreatePlan = async () => {
     if (!newPlanName.trim()) return;
-    const newId = createCustomPlan(newPlanName, newPlanDesc);
-    setSelectedPlanId(newId);
-    setNewPlanName("");
-    setNewPlanDesc("");
-    setIsNewPlanModalOpen(false);
-    showToast("Custom routine created! Add your first day below.");
+    try {
+      const created = await fetchApi<{ id: string }>("/api/v1/plans", { method: "POST", body: JSON.stringify({ name: newPlanName.trim(), description: newPlanDesc.trim() }) });
+      await refreshPlans(created.id);
+      setNewPlanName(""); setNewPlanDesc(""); setIsNewPlanModalOpen(false); setApiError(null);
+      showToast("Custom routine created! Add your first day below.");
+    } catch (error) { setApiError(error instanceof Error ? error.message : "Could not create this plan."); }
   };
 
-  const handleAddDay = () => {
+  const handleAddDay = async () => {
     if (!activePlan) return;
     const dayNum = activePlan.days.length + 1;
     const targetDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const targetDay = targetDays[(activePlan.days.length * 2) % 7];
-    addDayToPlan(activePlan.id, `Day ${dayNum}: Custom Split`, targetDay);
-    showToast(`Day ${dayNum} added to ${activePlan.name}`);
+    try {
+      await fetchApi(`/api/v1/plans/${encodeURIComponent(activePlan.id)}/days?name=${encodeURIComponent(`Day ${dayNum}: Custom Split`)}&target_day=${targetDay}`, { method: "POST" });
+      await refreshPlans(activePlan.id); showToast(`Day ${dayNum} added to ${activePlan.name}`);
+    } catch (error) { setApiError(error instanceof Error ? error.message : "Could not add a program day."); }
   };
 
-  const handleSelectExercise = (ex: CustomExercise) => {
+  const handleSelectExercise = async (ex: CustomExercise) => {
     if (!activePlan || !activeDay) return;
-    addExerciseToDay(activePlan.id, activeDay.id, ex);
-    setIsExerciseModalOpen(false);
-    showToast(`Added ${ex.name} to ${activeDay.name}`);
+    try {
+      await fetchApi(`/api/v1/plans/days/${encodeURIComponent(activeDay.id)}/exercises?name=${encodeURIComponent(ex.name)}&category=${encodeURIComponent(ex.category)}`, { method: "POST" });
+      await refreshPlans(activePlan.id); setIsExerciseModalOpen(false); showToast(`Added ${ex.name} to ${activeDay.name}`);
+    } catch (error) { setApiError(error instanceof Error ? error.message : "Could not add this exercise."); }
   };
 
-  const handleCreateCustomExercise = () => {
+  const handleCreateCustomExercise = async () => {
     if (!customExName.trim()) return;
-    addCustomExercise(
-      customExName,
-      customExCategory,
-      "Custom",
-      "Target Muscle",
-    );
-    setCustomExName("");
-    setIsCustomExModalOpen(false);
-    showToast("Custom movement added to exercise library!");
+    try {
+      const exercise = await fetchApi<CustomExercise>("/exercises", {
+        method: "POST",
+        body: JSON.stringify({ name: customExName.trim(), category: customExCategory, equipment: "Custom", primary_muscle: "Target Muscle" }),
+      });
+      setExerciseLibrary((current) => [exercise, ...current]);
+      setCustomExName(""); setIsCustomExModalOpen(false); showToast("Custom movement added to exercise library!");
+    } catch (error) { setApiError(error instanceof Error ? error.message : "Could not add this movement."); }
   };
 
-  const handlePublishPlan = () => {
+  const persistSetValue = (exerciseId: string, setIndex: number, field: string, value: number) => {
+    void fetchApi(`/api/v1/plans/exercises/${encodeURIComponent(exerciseId)}/sets`, {
+      method: "PATCH",
+      body: JSON.stringify({ set_index: setIndex, field, value }),
+    }).catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Could not save set details."));
+  };
+
+  const handlePublishPlan = async () => {
     if (!activePlan) return;
-    setActivePlan(activePlan.id);
-    showToast(`${activePlan.name} is now set as your active gym program!`);
+    try { await fetchApi(`/api/v1/plans/${encodeURIComponent(activePlan.id)}/activate`, { method: "PUT" }); await refreshPlans(activePlan.id); setActivePlan(activePlan.id); showToast(`${activePlan.name} is now set as your active gym program!`); }
+    catch (error) { setApiError(error instanceof Error ? error.message : "Could not activate this plan."); }
+  };
+
+  const handleDeletePlan = async () => {
+    if (!activePlan?.isCustom || !window.confirm(`Delete “${activePlan.name}”? This cannot be undone.`)) return;
+    const nextPlan = plans.find((plan) => plan.id !== activePlan.id);
+    try {
+      await fetchApi(`/api/v1/plans/${encodeURIComponent(activePlan.id)}`, { method: "DELETE" });
+      deletePlan(activePlan.id);
+      if (activePlan.isActive && nextPlan) { await fetchApi(`/api/v1/plans/${encodeURIComponent(nextPlan.id)}/activate`, { method: "PUT" }); setActivePlan(nextPlan.id); }
+      await refreshPlans(nextPlan?.id); setSelectedDayId(""); showToast(`${activePlan.name} deleted.`);
+    } catch (error) { setApiError(error instanceof Error ? error.message : "Could not delete this plan."); }
   };
 
   const showToast = (msg: string) => {
@@ -102,7 +154,7 @@ export default function WorkoutBuilderPage() {
     setTimeout(() => setToastMsg(null), 3500);
   };
 
-  const filteredExercises = customExercises.filter(
+  const filteredExercises = (exerciseLibrary.length ? exerciseLibrary : customExercises).filter(
     (ex) =>
       ex.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ex.category.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -111,6 +163,7 @@ export default function WorkoutBuilderPage() {
   return (
     <AppShell>
       <div className='space-y-6'>
+        {apiError && <p role='status' className='rounded-sm border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-3 py-2 text-[12px] text-[var(--color-warning)]'>{apiError}</p>}
         {/* Toast Feedback Banner */}
         {toastMsg && (
           <div className='p-3.5 rounded-sm bg-[var(--color-surface-elevated)] border border-[var(--color-accent-primary)] text-[var(--color-accent-primary)] flex items-center justify-between text-[13px] font-mono animate-in fade-in'>
@@ -154,6 +207,12 @@ export default function WorkoutBuilderPage() {
           </div>
 
           <div className='flex items-center gap-2'>
+            {activePlan?.isCustom && (
+              <Button variant='ghost' onClick={handleDeletePlan} aria-label={`Delete ${activePlan.name}`} className='gap-2 text-[var(--color-error)]'>
+                <Trash2 className='h-4 w-4' />
+                <span className='hidden sm:inline'>Delete</span>
+              </Button>
+            )}
             <Button
               variant='secondary'
               onClick={() => setIsNewPlanModalOpen(true)}
@@ -281,9 +340,16 @@ export default function WorkoutBuilderPage() {
                                 <span className='text-[11px] font-mono text-[var(--color-text-muted)]'>
                                   SET {sIdx + 1}
                                 </span>
-                                <span className='text-[12px] font-mono font-medium'>
-                                  {set.weight} kg
-                                </span>
+                                <input
+                                  aria-label={`${ex.name}, set ${sIdx + 1} weight in kilograms`}
+                                  type='number'
+                                  min={0}
+                                  step={2.5}
+                                  value={set.weight}
+                                  onChange={(e) => { const value = Number(e.target.value); updateSetInPlan(activePlan.id, activeDay.id, ex.id, sIdx, "weight", value); persistSetValue(ex.id, sIdx, "weight", value); }}
+                                  className='w-[72px] rounded border border-[var(--color-border-default)] bg-[var(--color-bg-secondary)] px-1 py-1 text-center text-[12px] font-mono font-medium text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-primary)]'
+                                />
+                                <span className='text-[10px] font-mono text-[var(--color-text-muted)]'>kg</span>
                               </div>
 
                               <div className='flex items-center justify-between px-2'>
@@ -293,16 +359,18 @@ export default function WorkoutBuilderPage() {
                                 <input
                                   type='number'
                                   value={set.targetReps}
-                                  onChange={(e) =>
+                                  onChange={(e) => {
+                                    const value = Number(e.target.value);
                                     updateSetInPlan(
                                       activePlan.id,
                                       activeDay.id,
                                       ex.id,
                                       sIdx,
                                       "targetReps",
-                                      Number(e.target.value),
-                                    )
-                                  }
+                                      value,
+                                    );
+                                    persistSetValue(ex.id, sIdx, "targetReps", value);
+                                  }}
                                   className='w-12 bg-[var(--color-bg-secondary)] border border-[var(--color-border-default)] rounded px-1 text-center text-[13px] font-mono text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-primary)]'
                                 />
                               </div>
@@ -311,9 +379,16 @@ export default function WorkoutBuilderPage() {
                                 <span className='text-[11px] font-mono text-[var(--color-text-muted)] flex items-center gap-1'>
                                   <Clock className='h-3 w-3' /> REST
                                 </span>
-                                <span className='text-[12px] font-mono text-[var(--color-text-primary)]'>
-                                  {set.restSeconds}s
-                                </span>
+                                <input
+                                  aria-label={`${ex.name}, set ${sIdx + 1} rest seconds`}
+                                  type='number'
+                                  min={0}
+                                  step={15}
+                                  value={set.restSeconds}
+                                  onChange={(e) => { const value = Number(e.target.value); updateSetInPlan(activePlan.id, activeDay.id, ex.id, sIdx, "restSeconds", value); persistSetValue(ex.id, sIdx, "restSeconds", value); }}
+                                  className='w-[56px] rounded border border-[var(--color-border-default)] bg-[var(--color-bg-secondary)] px-1 py-1 text-center text-[12px] font-mono text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent-primary)]'
+                                />
+                                <span className='text-[10px] font-mono text-[var(--color-text-muted)]'>s</span>
                               </div>
                             </div>
                           ))}

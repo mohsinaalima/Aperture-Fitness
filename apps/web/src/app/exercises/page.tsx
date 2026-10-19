@@ -1,72 +1,36 @@
 "use client";
 
-import React, { useState } from "react";
-import { Search, Dumbbell, ChevronRight, Activity } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import { Search, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { fetchApi } from "@/lib/api";
 
-const CATEGORIES = [
-  "All",
-  "Chest",
-  "Back",
-  "Quads",
-  "Posterior Chain",
-  "Shoulders",
-  "Arms",
-];
-
-const EXERCISES_LIBRARY = [
-  {
-    name: "Barbell Bench Press",
-    category: "Chest",
-    primaryMuscle: "Pectoralis Major",
-    equipment: "Barbell",
-  },
-  {
-    name: "Barbell Back Squat",
-    category: "Quads",
-    primaryMuscle: "Quadriceps, Glutes",
-    equipment: "Barbell",
-  },
-  {
-    name: "Romanian Deadlift",
-    category: "Posterior Chain",
-    primaryMuscle: "Hamstrings, Glutes",
-    equipment: "Barbell",
-  },
-  {
-    name: "Overhead Barbell Press",
-    category: "Shoulders",
-    primaryMuscle: "Anterior Deltoid",
-    equipment: "Barbell",
-  },
-  {
-    name: "Incline Dumbbell Press",
-    category: "Chest",
-    primaryMuscle: "Clavicular Pectoralis",
-    equipment: "Dumbbells",
-  },
-  {
-    name: "Lat Pulldown",
-    category: "Back",
-    primaryMuscle: "Latissimus Dorsi",
-    equipment: "Cable",
-  },
-];
+type Exercise = { id: string; name: string; category: string; primaryMuscle: string; equipment: string };
 
 export default function ExerciseLibraryPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [search, setSearch] = useState("");
+  const [categories, setCategories] = useState<string[]>(["All"]);
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const filtered = EXERCISES_LIBRARY.filter((ex) => {
-    const matchesCat =
-      activeCategory === "All" || ex.category === activeCategory;
-    const matchesSearch =
-      ex.name.toLowerCase().includes(search.toLowerCase()) ||
-      ex.primaryMuscle.toLowerCase().includes(search.toLowerCase());
-    return matchesCat && matchesSearch;
-  });
+  useEffect(() => {
+    let active = true;
+    const query = new URLSearchParams({ category: activeCategory, search });
+    fetchApi<{ categories: string[]; exercises: Array<Exercise & { primary_muscle?: string }> }>(`/exercises?${query}`)
+      .then((data) => {
+        if (!active) return;
+        setCategories(["All", ...data.categories.filter((category) => category !== "All")]);
+        setExercises(data.exercises.map((exercise) => ({ ...exercise, primaryMuscle: exercise.primary_muscle ?? exercise.primaryMuscle })));
+        setLoadError(null);
+      })
+      .catch((error: unknown) => { if (active) setLoadError(error instanceof Error ? error.message : "Could not load exercises."); });
+    return () => { active = false; };
+  }, [activeCategory, search]);
+  const filtered = exercises;
 
   return (
     <AppShell>
@@ -87,6 +51,7 @@ export default function ExerciseLibraryPage() {
             <Search className='h-4 w-4 absolute left-3 top-3 text-[var(--color-text-muted)]' />
             <input
               type='text'
+              aria-label='Search exercises by name or muscle'
               placeholder='Search exercise or target muscle...'
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -95,9 +60,10 @@ export default function ExerciseLibraryPage() {
           </div>
 
           <div className='flex items-center gap-2 overflow-x-auto pb-1'>
-            {CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <button
                 key={cat}
+                aria-pressed={activeCategory === cat}
                 onClick={() => setActiveCategory(cat)}
                 className={`px-3 py-1.5 rounded-sm text-[13px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                   activeCategory === cat
@@ -113,8 +79,8 @@ export default function ExerciseLibraryPage() {
 
         {/* Exercise Grid */}
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
-          {filtered.map((ex, i) => (
-            <Card key={i} className='flex flex-col justify-between'>
+          {filtered.map((ex) => (
+            <Card key={ex.name} className='flex flex-col justify-between'>
               <CardHeader className='pb-2'>
                 <span className='text-[11px] font-mono text-[var(--color-accent-primary)] uppercase'>
                   {ex.category} • {ex.equipment}
@@ -134,21 +100,26 @@ export default function ExerciseLibraryPage() {
 
                 <div className='flex items-center justify-between pt-1'>
                   <span className='text-[12px] text-[var(--color-text-muted)] font-mono'>
-                    Diagnostic Available
+                    Training analytics
                   </span>
-                  <Button
-                    variant='ghost'
-                    size='default'
-                    className='gap-1 text-[12px] px-2'
-                  >
-                    <span>View History</span>
-                    <ChevronRight className='h-3.5 w-3.5' />
-                  </Button>
+                  <Link href='/analytics'>
+                    <Button variant='ghost' size='default' className='gap-1 text-[12px] px-2'>
+                      <span>View analytics</span>
+                      <ChevronRight className='h-3.5 w-3.5' />
+                    </Button>
+                  </Link>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
+        {loadError && <p role="status" className="text-sm text-[var(--color-warning)]">{loadError}</p>}
+        {filtered.length === 0 && !loadError && (
+          <Card className='p-8 text-center'>
+            <h2 className='font-display text-[18px] font-semibold'>No exercises found</h2>
+            <p className='mt-2 text-[13px] text-[var(--color-text-secondary)]'>Try another search or choose a different muscle group.</p>
+          </Card>
+        )}
       </div>
     </AppShell>
   );

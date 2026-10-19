@@ -1,21 +1,32 @@
 "use client";
 
-import React from "react";
-import Link from "next/link"; // Added missing import
-import {
-  User,
-  Settings,
-  CreditCard,
-  HelpCircle,
-  LogOut,
-  ShieldCheck,
-  ChevronRight,
-} from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { LogOut } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/auth-context";
+import { fetchApi } from "@/lib/api";
+
+type ProfileData = { initials: string; membershipTier: string; preferences: { unitSystem: string; unitDescription: string; restIntervalSeconds: number }; billing: { planName: string; renewalDateFormatted: string; monthlyPriceFormatted: string } };
 
 export default function ProfilePage() {
+  const { user, logout } = useAuth();
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  useEffect(() => {
+    let active = true;
+    fetchApi<ProfileData>("/api/profile")
+      .then((data) => { if (active) setProfile(data); })
+      .catch((error: unknown) => console.error("Could not load profile preferences:", error));
+    return () => { active = false; };
+  }, []);
+  const initials = user?.name
+    ?.split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "AF";
+
   return (
     <AppShell>
       <div className='max-w-[640px] mx-auto space-y-6'>
@@ -32,18 +43,18 @@ export default function ProfilePage() {
         {/* User Identity Banner */}
         <Card className='flex items-center gap-4 p-4'>
           <div className='h-12 w-12 rounded-full bg-[var(--color-accent-subtle)] border border-[var(--color-accent-primary)] flex items-center justify-center text-[var(--color-accent-primary)] font-bold text-[18px]'>
-            AF
+            {profile?.initials || initials}
           </div>
           <div className='flex-1'>
             <h2 className='text-[16px] font-semibold text-[var(--color-text-primary)]'>
-              Alex Foster
+              {user?.name || "Aperture member"}
             </h2>
             <p className='text-[13px] text-[var(--color-text-secondary)] font-mono'>
-              alex.foster@aperture.fit
+              {user?.email || ""}
             </p>
           </div>
           <span className='px-2.5 py-1 rounded-sm bg-[var(--color-surface-elevated-2)] border border-[var(--color-border-default)] text-[12px] font-mono text-[var(--color-accent-primary)] font-semibold'>
-            PRO MEMBER
+            {profile?.membershipTier || (user?.role || "member").toUpperCase()}
           </span>
         </Card>
 
@@ -63,11 +74,11 @@ export default function ProfilePage() {
                     Default Unit System
                   </h4>
                   <p className='text-[12px] text-[var(--color-text-muted)]'>
-                    Kilograms (kg) with 2.5kg steppers
+                    {profile?.preferences.unitDescription || "Kilograms (kg) with 2.5kg steppers"}
                   </p>
                 </div>
                 <span className='text-[13px] font-mono text-[var(--color-accent-primary)] font-semibold'>
-                  Metric (KG)
+                  {profile?.preferences.unitSystem || "Metric (KG)"}
                 </span>
               </div>
 
@@ -77,35 +88,35 @@ export default function ProfilePage() {
                     Default Rest Interval
                   </h4>
                   <p className='text-[12px] text-[var(--color-text-muted)]'>
-                    Automatically triggers timer on set completion
+                    Uses the rest interval configured for each set
                   </p>
                 </div>
                 <span className='text-[13px] font-mono text-[var(--color-text-primary)]'>
-                  90 seconds
+                  {profile ? `${profile.preferences.restIntervalSeconds} seconds` : "Plan based"}
                 </span>
               </div>
             </div>
           </Card>
 
-          {/* Section 2: Subscription & Billing */}
+          {/* Account information */}
           <Card className='p-0 overflow-hidden'>
             <div className='p-4 border-b border-[var(--color-border-default)] bg-[var(--color-bg-secondary)]'>
               <h3 className='text-[14px] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider font-mono'>
-                Subscription & Billing
+                Account
               </h3>
             </div>
             <div className='divide-y divide-[var(--color-border-default)]'>
               <div className='flex items-center justify-between p-4'>
                 <div>
                   <h4 className='text-[14px] font-medium text-[var(--color-text-primary)]'>
-                    Aperture Pro Tier
+                    Training facility
                   </h4>
                   <p className='text-[12px] text-[var(--color-text-muted)]'>
-                    Renews automatically on Sep 15, 2026
+                    Your account workspace
                   </p>
                 </div>
                 <span className='tabular-nums text-[14px] font-mono text-[var(--color-text-primary)]'>
-                  $12.00 / mo
+                  {user?.gymName || "Aperture Fitness"}
                 </span>
               </div>
             </div>
@@ -113,15 +124,14 @@ export default function ProfilePage() {
 
           {/* Section 3: Logout Action */}
           <div className='pt-2'>
-            <Link href='/login'>
               <Button
                 variant='secondary'
                 className='w-full gap-2 text-[14px] text-[var(--color-error)] border-[var(--color-error)]/30 hover:bg-[var(--color-error)]/10'
+                onClick={() => void logout()}
               >
                 <LogOut className='h-4 w-4' />
                 <span>Log Out of Account</span>
               </Button>
-            </Link>
           </div>
         </div>
       </div>

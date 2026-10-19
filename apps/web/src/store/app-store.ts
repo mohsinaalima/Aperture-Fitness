@@ -59,6 +59,7 @@ export interface CompletedSession {
 interface AppState {
   // Master Collections
   plans: RoutinePlan[];
+  replacePlans: (plans: RoutinePlan[]) => void;
   customExercises: CustomExercise[];
   completedSessions: CompletedSession[];
   
@@ -133,6 +134,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       plans: DEFAULT_PLANS,
+      replacePlans: (plans) => set({ plans }),
       customExercises: DEFAULT_EXERCISES,
       completedSessions: [
         {
@@ -276,19 +278,25 @@ export const useAppStore = create<AppState>()(
         const active = get().activeWorkout;
         if (!active) return;
 
-        const updatedExercises = [...active.exercises];
-        const targetEx = updatedExercises[exerciseIndex];
+        const targetEx = active.exercises[exerciseIndex];
         if (!targetEx) return;
 
         const targetSet = targetEx.sets[setIndex];
-        const isNowCompleted = !targetSet.completed;
+        if (!targetSet) return;
+        const isNowCompleted = true;
 
-        targetEx.sets[setIndex] = {
-          ...targetSet,
-          weight,
-          targetReps: reps,
-          completed: isNowCompleted,
-        };
+        const updatedExercises = active.exercises.map((exercise, idx) =>
+          idx === exerciseIndex
+            ? {
+                ...exercise,
+                sets: exercise.sets.map((set, setIdx) =>
+                  setIdx === setIndex
+                    ? { ...set, weight, targetReps: reps, completed: isNowCompleted }
+                    : set,
+                ),
+              }
+            : exercise,
+        );
 
         let newRestTimer = active.activeRestTimer;
         if (isNowCompleted) {
@@ -350,7 +358,9 @@ export const useAppStore = create<AppState>()(
 
         const newSession: CompletedSession = {
           id: `hist-${Date.now()}`,
-          planName: active.dayName,
+          planName:
+            get().plans.find((plan) => plan.id === active.planId)?.name ||
+            active.dayName,
           dayName: active.dayName,
           completedAt: new Date().toISOString(),
           totalVolumeKg: totalVolume,

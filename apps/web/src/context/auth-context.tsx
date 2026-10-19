@@ -8,6 +8,7 @@ import React, {
   useCallback,
 } from "react";
 import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "@/lib/api";
 
 export type UserRole = "owner" | "trainer" | "member";
 
@@ -16,27 +17,25 @@ export interface AuthUser {
   name: string;
   email: string;
   role: UserRole;
-  gymName: string;
+  gymName: string | null;
+  roles: UserRole[];
+  onboardingComplete: boolean;
+}
+
+export interface RegistrationInput {
+  name: string;
+  username: string;
+  email: string;
+  password: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
-  loginAs: (role: UserRole, customPassword?: string) => Promise<void>;
+  loginAs: (email: string, password: string) => Promise<void>;
+  register: (input: RegistrationInput) => Promise<void>;
   logout: () => void;
 }
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-
-// Fallback email map matching backend demo accounts
-const ROLE_CREDENTIALS: Record<
-  UserRole,
-  { email: string; defaultPass: string }
-> = {
-  owner: { email: "owner@aperture.fit", defaultPass: "Password123!" },
-  trainer: { email: "trainer@aperture.fit", defaultPass: "Password123!" },
-  member: { email: "athlete@aperture.fit", defaultPass: "Password123!" },
-};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -45,18 +44,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const router = useRouter();
 
-  // Load session from backend using stored token or restore role
+  // Restore the server-managed session from the HTTP-only cookie.
   const loadUserFromToken = useCallback(async () => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
-
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        credentials: "include",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
       });
@@ -64,106 +57,107 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         const userData: AuthUser = await response.json();
         setUser(userData);
-        localStorage.setItem("aperture_role", userData.role);
       } else {
-        // Token expired or invalid
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
-        localStorage.removeItem("aperture_role");
         setUser(null);
       }
-    } catch (error) {
-      console.error("Failed to fetch user session from FastAPI:", error);
+    } catch {
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadUserFromToken();
+    const timeout = window.setTimeout(() => {
+      void loadUserFromToken();
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [loadUserFromToken]);
 
-  // Real backend login connected to FastAPI
-  const loginAs = async (role: UserRole, customPassword?: string) => {
+  const loginAs = async (email: string, password: string) => {
     setIsLoading(true);
-    const credentials = ROLE_CREDENTIALS[role];
-    const password = customPassword || credentials.defaultPass;
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          email: credentials.email,
+          email,
           password: password,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || "Authentication failed");
+        const detail = Array.isArray(errorData.detail)
+          ? errorData.detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join(" ")
+          : errorData.detail;
+        throw new Error(detail || "Authentication failed. Check your email and password.");
       }
 
       const data = await response.json();
 
-      // Store real JWT tokens
-      localStorage.setItem("access_token", data.access_token);
-      localStorage.setItem("refresh_token", data.refresh_token);
-      localStorage.setItem("aperture_role", role);
-
-      setUser(data.user);
-
-      // Strict Role-Based Navigation Routing
-      if (role === "owner") {
-        router.push("/owner");
-      } else if (role === "trainer") {
-        router.push("/trainer");
-      } else {
-        router.push("/dashboard");
-      }
+      const authenticatedUser = data.user as AuthUser;
+      setUser(authenticatedUser);
+      router.push(authenticatedUser.onboardingComplete ? workspacePath(authenticatedUser.role) : "/onboarding");
     } catch (error) {
-      console.error("Login Error:", error);
-      alert(
-        error instanceof Error
-          ? error.message
-          : "Failed to connect to backend API",
-      );
+      throw error instanceof Error ? error : new Error("Failed to connect to backend API");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const register = async (input: RegistrationInput) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = Array.isArray(data.detail)
+          ? data.detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join(" ")
+          : data.detail;
+        throw new Error(detail || "Could not create your account. Please try again.");
+      }
+      const registeredUser = data.user as AuthUser;
+      setUser(registeredUser);
+      router.push("/onboarding");
     } finally {
       setIsLoading(false);
     }
   };
 
   const logout = async () => {
-    const token = localStorage.getItem("access_token");
-    if (token) {
-      try {
-        await fetch(`${API_BASE_URL}/api/auth/logout`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
-      } catch (err) {
-        console.error("Failed to notify backend on logout:", err);
-      }
+    try {
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Clear local UI state even if the network is unavailable.
     }
-
-    // Clean client state
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    localStorage.removeItem("aperture_role");
     setUser(null);
     router.push("/login");
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, loginAs, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, loginAs, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
+}
+
+function workspacePath(role: UserRole): string {
+  if (role === "owner") return "/owner";
+  if (role === "trainer") return "/trainer";
+  return "/dashboard";
 }
 
 export function useAuth() {

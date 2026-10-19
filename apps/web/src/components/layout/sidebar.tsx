@@ -25,33 +25,28 @@ export const Sidebar: React.FC = () => {
 
   // Role-based Navigation Configuration
   const getNavItems = () => {
-    if (user?.role === "owner") {
-      return [
-        { label: "Owner Portal", href: "/owner", icon: Building2 },
-        { label: "Trainer Roster", href: "/owner", icon: Users },
-        { label: "Analytics", href: "/analytics", icon: BarChart3 },
-        { label: "Profile", href: "/profile", icon: User },
-      ];
+    const roles = user?.roles ?? [];
+    const items = [];
+    if (roles.includes("member")) {
+      items.push(
+        { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+        { label: "Plans", href: "/plans", icon: Calendar },
+        { label: "Log Workout", href: "/log", icon: PlusCircle },
+      );
     }
-
-    if (user?.role === "trainer") {
-      return [
+    if (roles.includes("trainer")) {
+      items.push(
         { label: "Trainer Workspace", href: "/trainer", icon: Users },
-        { label: "Plan Builder", href: "/plans/builder", icon: Calendar },
-        { label: "Exercise Library", href: "/exercises", icon: Dumbbell },
-        { label: "Analytics", href: "/analytics", icon: BarChart3 },
-        { label: "Profile", href: "/profile", icon: User },
-      ];
+        { label: "Plan Builder", href: "/plans/builder", icon: Dumbbell },
+      );
     }
-
-    // Default Member Navigation
-    return [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "Plans", href: "/plans", icon: Calendar },
-      { label: "Log Workout", href: "/log", icon: PlusCircle },
-      { label: "Analytics", href: "/analytics", icon: BarChart3 },
-      { label: "Profile", href: "/profile", icon: User },
-    ];
+    if (roles.includes("owner")) {
+      items.push({ label: "Owner Portal", href: "/owner", icon: Building2 });
+    }
+    items.push({ label: "Analytics", href: "/analytics", icon: BarChart3 });
+    items.push({ label: "Setup & invitations", href: "/onboarding", icon: PlusCircle });
+    items.push({ label: "Profile", href: "/profile", icon: User });
+    return items;
   };
 
   const navItems = getNavItems();
@@ -75,7 +70,7 @@ export const Sidebar: React.FC = () => {
         </div>
 
         {/* Quick Action Button for Members */}
-        {user?.role === "member" && (
+        {user?.roles.includes("member") && (
           <div className='px-1 pt-1'>
             <Link href='/log'>
               <Button
@@ -91,13 +86,13 @@ export const Sidebar: React.FC = () => {
 
         {/* Dynamic Navigation Links */}
         <nav className='space-y-1'>
-          {navItems.map((item, i) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
             return (
               <Link
-                key={i}
+                key={item.href}
                 href={item.href}
                 className={cn(
                   "flex items-center gap-3 px-3.5 py-2.5 text-[14px] font-medium transition-colors duration-100",
@@ -123,10 +118,10 @@ export const Sidebar: React.FC = () => {
       <div className='border-t border-[var(--color-border-default)] pt-3 px-2 flex items-center justify-between'>
         <div className='truncate'>
           <p className='text-[13px] font-semibold text-[var(--color-text-primary)] truncate'>
-            {user?.name || "Alex Foster"}
+            {user?.name || "Account"}
           </p>
           <p className='text-[11px] font-mono text-[var(--color-text-muted)] truncate'>
-            {user?.gymName || "Aperture Hub"}
+            {user?.gymName || ""}
           </p>
         </div>
         <button
