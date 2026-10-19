@@ -4,6 +4,17 @@ from typing import List, Optional
 class StartSessionRequest(BaseModel):
     plan_id: str
     day_id: str
+    day_name: str
+    exercises: List["StartExerciseRequest"]
+
+class StartSetRequest(BaseModel):
+    weight: float = 0
+    target_reps: int = 0
+
+class StartExerciseRequest(BaseModel):
+    name: str
+    category: str = "Strength"
+    sets: List[StartSetRequest]
 
 class ToggleSetRequest(BaseModel):
     exercise_index: int

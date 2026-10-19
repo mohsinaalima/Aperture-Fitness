@@ -30,9 +30,9 @@ class UserRepository:
         self,
         email: str,
         username: str,
-        hashed_password: str,
+        hashed_password: Optional[str],
         name: str,
-        gym_name: str = "Aperture Iron Vault • Central",
+        gym_name: Optional[str] = None,
         role: UserRole = UserRole.MEMBER,
     ) -> User:
         user = User(
@@ -44,12 +44,10 @@ class UserRepository:
             role=role,
         )
         self.session.add(user)
-        await self.session.commit()
-        await self.session.refresh(user)
+        await self.session.flush()
         return user
 
     async def update_last_login(self, user_id: uuid.UUID) -> None:
         user = await self.get_by_id(user_id)
         if user:
             user.last_login = datetime.now(timezone.utc)
-            await self.session.commit()

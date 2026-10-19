@@ -23,7 +23,7 @@ async def get_active_workout(
 ):
     repo = WorkoutLoggerRepository(db)
     service = WorkoutLoggerService(repo)
-    session = await service.get_current_workout(current_user.id)
+    session = await service.get_current_workout(str(current_user.id))
     return session
 
 @router.post("/start", response_model=ActiveWorkoutResponse, status_code=status.HTTP_201_CREATED)
@@ -34,7 +34,7 @@ async def start_workout(
 ):
     repo = WorkoutLoggerRepository(db)
     service = WorkoutLoggerService(repo)
-    return await service.start_session(current_user.id, body)
+    return await service.start_session(str(current_user.id), body)
 
 @router.post("/toggle-set", response_model=ActiveWorkoutResponse)
 async def toggle_set(
@@ -45,7 +45,7 @@ async def toggle_set(
     repo = WorkoutLoggerRepository(db)
     service = WorkoutLoggerService(repo)
     try:
-        return await service.toggle_set(current_user.id, body)
+        return await service.toggle_set(str(current_user.id), body)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -56,7 +56,7 @@ async def finish_workout(
 ):
     repo = WorkoutLoggerRepository(db)
     service = WorkoutLoggerService(repo)
-    completed = await service.finish_session(current_user.id)
+    completed = await service.finish_session(str(current_user.id))
     if not completed:
         raise HTTPException(status_code=404, detail="No active workout to finish")
     return {"message": "Workout session completed successfully."}

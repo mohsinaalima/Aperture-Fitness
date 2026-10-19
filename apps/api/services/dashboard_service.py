@@ -1,5 +1,5 @@
 from repositories.dashboard_repository import DashboardRepository
-from schemas.dashboard import DashboardDataResponse, PlanResponse, DaySpec, CompletedSessionResponse
+from schemas.dashboard import DashboardDataResponse, PlanResponse, DaySpec, ExerciseSpec, CompletedSessionResponse
 
 class DashboardService:
     def __init__(self, repository: DashboardRepository):
@@ -15,7 +15,20 @@ class DashboardService:
         today_day_spec = None
 
         if active_plan_model:
-            parsed_days = [DaySpec(**day) for day in active_plan_model.days] if active_plan_model.days else []
+            parsed_days = [
+                DaySpec(
+                    name=day.name,
+                    exercises=[
+                        ExerciseSpec(
+                            name=exercise.name,
+                            target_sets=len(exercise.sets or []),
+                            target_reps=str((exercise.sets or [{}])[0].get("targetReps", 0)),
+                        )
+                        for exercise in day.exercises
+                    ],
+                )
+                for day in active_plan_model.days
+            ]
             active_plan = PlanResponse(
                 id=active_plan_model.id,
                 name=active_plan_model.name,
@@ -26,15 +39,22 @@ class DashboardService:
                 today_day_spec = parsed_days[0]
 
         # Parse Session Data
-        formatted_sessions = [
-            CompletedSessionResponse(
-                id=s.id,
-                sessionName=s.session_name,
-                totalVolumeKg=s.total_volume_kg,
-                durationMinutes=s.duration_minutes,
-                completedAt=s.completed_at
-            ) for s in sessions
-        ]
+        formatted_sessions = []
+        for session in sessions:
+            volume = sum(
+                set_row.weight_kg * set_row.completed_reps
+                for exercise in session.exercises
+                for set_row in exercise.sets
+                if set_row.is_completed
+            )
+            duration = max(1, round(((session.completed_at or session.started_at) - session.started_at).total_seconds() / 60))
+            formatted_sessions.append(CompletedSessionResponse(
+                id=session.id,
+                sessionName=session.day_name,
+                totalVolumeKg=volume,
+                durationMinutes=duration,
+                completedAt=session.completed_at or session.started_at,
+            ))
 
         last_logged = formatted_sessions[0].completedAt if formatted_sessions else None
 

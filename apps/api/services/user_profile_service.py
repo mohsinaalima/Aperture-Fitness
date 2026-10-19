@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Optional
+from models.user import User
 from repositories.user_profile_repository import UserProfileRepository
 from models.user_profile import UserProfile
 from schemas.user_profile import (
@@ -36,14 +36,14 @@ class UserProfileService:
             ),
         )
 
-    async def get_profile(self, user_id: Optional[str] = None) -> ProfileResponse:
-        user = await self.repository.get_by_id(user_id) if user_id else await self.repository.get_first_user()
+    async def get_profile(self, account: User) -> ProfileResponse:
+        user = await self.repository.get_by_email(account.email)
         
         if not user:
             user = UserProfile(
-                full_name="Alex Foster",
-                email="alex.foster@aperture.fit",
-                initials="AF",
+                full_name=account.name,
+                email=account.email,
+                initials="".join(part[0] for part in account.name.split()[:2]).upper() or "AF",
                 membership_tier="PRO MEMBER",
                 unit_system="Metric (KG)",
                 unit_description="Kilograms (kg) with 2.5kg steppers",
@@ -56,8 +56,8 @@ class UserProfileService:
 
         return self._build_response(user)
 
-    async def update_preferences(self, request: UpdatePreferencesRequest, user_id: Optional[str] = None) -> ProfileResponse:
-        user = await self.repository.get_by_id(user_id) if user_id else await self.repository.get_first_user()
+    async def update_preferences(self, request: UpdatePreferencesRequest, account: User) -> ProfileResponse:
+        user = await self.repository.get_by_email(account.email)
         if not user:
             raise ValueError("User profile not found")
 

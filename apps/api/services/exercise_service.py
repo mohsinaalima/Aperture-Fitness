@@ -1,6 +1,6 @@
 from typing import List, Optional
 from repositories.exercise_repository import ExerciseRepository
-from schemas.exercise import ExerciseListResponse, ExerciseResponse
+from schemas.exercise import ExerciseListResponse, ExerciseResponse, ExerciseCreate
 
 INITIAL_LIBRARY = [
     {"name": "Barbell Bench Press", "category": "Chest", "primaryMuscle": "Pectoralis Major", "equipment": "Barbell"},
@@ -31,3 +31,7 @@ class ExerciseService:
             categories=categories,
             exercises=exercise_dtos
         )
+
+    async def create_exercise(self, data: ExerciseCreate) -> ExerciseResponse:
+        exercise = await self.repository.create_exercise(data)
+        return ExerciseResponse.model_validate(exercise)

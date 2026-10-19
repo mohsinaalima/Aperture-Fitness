@@ -18,3 +18,9 @@ class ExerciseListResponse(BaseModel):
     total: int
     categories: List[str]
     exercises: List[ExerciseResponse]
+
+class ExerciseCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=150)
+    category: str = Field(..., min_length=2, max_length=80)
+    primary_muscle: str = Field(..., min_length=2, max_length=150)
+    equipment: str = Field("Custom", min_length=2, max_length=80)

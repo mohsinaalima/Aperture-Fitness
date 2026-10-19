@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import String, Boolean, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, TimestampMixin
 
@@ -24,5 +24,3 @@ class RefreshToken(Base, TimestampMixin):
         DateTime(timezone=True), nullable=False
     )
     revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    user: Mapped["User"] = relationship("User", back_populates="refresh_tokens")
