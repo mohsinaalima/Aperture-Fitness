@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { SkipForward } from "lucide-react";
 import { useAppStore } from "@/store/app-store";
 import { ApertureIrisProgress } from "@/components/ui/aperture-iris";
@@ -8,16 +8,15 @@ import { ApertureIrisProgress } from "@/components/ui/aperture-iris";
 export const FloatingRestTimer: React.FC = () => {
   const activeWorkout = useAppStore((s) => s.activeWorkout);
   const cancelRestTimer = useAppStore((s) => s.cancelRestTimer);
-  const [clockNow, setClockNow] = useState(0);
-  const alertedTimerEnd = useRef<number | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const timerInfo = activeWorkout?.activeRestTimer;
   const remainingSeconds = timerInfo
-    ? Math.max(0, Math.ceil((timerInfo.endTime - (clockNow || timerInfo.endTime - timerInfo.duration * 1000)) / 1000))
+    ? Math.max(0, Math.ceil((timerInfo.endTime - currentTime) / 1000))
     : 0;
 
   // Synthesize Web Audio Beep & Haptic Vibration on completion
-  const triggerCompletionAlert = () => {
+  const triggerCompletionAlert = useCallback(() => {
     // 1. Mobile Vibration API
     if (typeof window !== "undefined" && "vibrate" in navigator) {
       navigator.vibrate([200, 100, 200]);
@@ -42,24 +41,23 @@ export const FloatingRestTimer: React.FC = () => {
         osc.stop(ctx.currentTime + 0.3);
       }
     } catch {
-      // Audio feedback is optional when the browser blocks Web Audio.
+      // Audio context fallback ignored
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!timerInfo) return;
-    const interval = setInterval(() => setClockNow(Date.now()), 1000);
+
+    const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [timerInfo]);
 
   useEffect(() => {
     if (!timerInfo || remainingSeconds > 0) return;
-    if (alertedTimerEnd.current !== timerInfo.endTime) {
-      alertedTimerEnd.current = timerInfo.endTime;
-      triggerCompletionAlert();
-    }
+
+    triggerCompletionAlert();
     cancelRestTimer();
-  }, [timerInfo, remainingSeconds, cancelRestTimer]);
+  }, [timerInfo, remainingSeconds, triggerCompletionAlert, cancelRestTimer]);
 
   if (!timerInfo || remainingSeconds <= 0) return null;
 

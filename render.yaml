@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: aperture-fitness-api
+    runtime: python
+    rootDir: apps/api
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: APP_NAME
+        value: Aperture Fitness API
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: AUTH_SESSION_COOKIE
+        value: aperture_session
+      - key: AUTH_SESSION_EXPIRE_DAYS
+        value: "7"

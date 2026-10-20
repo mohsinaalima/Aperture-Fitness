@@ -8,7 +8,6 @@ import React, {
   useCallback,
 } from "react";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api";
 
 export type UserRole = "owner" | "trainer" | "member";
 
@@ -17,25 +16,17 @@ export interface AuthUser {
   name: string;
   email: string;
   role: UserRole;
-  gymName: string | null;
-  roles: UserRole[];
-  onboardingComplete: boolean;
-}
-
-export interface RegistrationInput {
-  name: string;
-  username: string;
-  email: string;
-  password: string;
+  gymName?: string | null;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   loginAs: (email: string, password: string) => Promise<void>;
-  register: (input: RegistrationInput) => Promise<void>;
   logout: () => void;
 }
+
+const API_BASE_URL = "/api/backend";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -44,14 +35,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const router = useRouter();
 
-  // Restore the server-managed session from the HTTP-only cookie.
-  const loadUserFromToken = useCallback(async () => {
+  // Restore the server-managed session cookie.
+  const loadUserFromSession = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
       });
 
       if (response.ok) {
@@ -60,20 +48,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUser(null);
       }
-    } catch {
-      setUser(null);
+    } catch (error) {
+      console.error("Failed to fetch user session from FastAPI:", error);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      void loadUserFromToken();
+    const timeoutId = window.setTimeout(() => {
+      void loadUserFromSession();
     }, 0);
-    return () => window.clearTimeout(timeout);
-  }, [loadUserFromToken]);
 
+    return () => window.clearTimeout(timeoutId);
+  }, [loadUserFromSession]);
+
+  // Real backend login connected to FastAPI
   const loginAs = async (email: string, password: string) => {
     setIsLoading(true);
 
@@ -86,49 +76,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
         body: JSON.stringify({
           email,
-          password: password,
+          password,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const detail = Array.isArray(errorData.detail)
-          ? errorData.detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join(" ")
-          : errorData.detail;
-        throw new Error(detail || "Authentication failed. Check your email and password.");
+        throw new Error(errorData.detail || "Authentication failed");
       }
 
       const data = await response.json();
-
-      const authenticatedUser = data.user as AuthUser;
+      const authenticatedUser: AuthUser = data.user;
       setUser(authenticatedUser);
-      router.push(authenticatedUser.onboardingComplete ? workspacePath(authenticatedUser.role) : "/onboarding");
-    } catch (error) {
-      throw error instanceof Error ? error : new Error("Failed to connect to backend API");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  const register = async (input: RegistrationInput) => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const detail = Array.isArray(data.detail)
-          ? data.detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join(" ")
-          : data.detail;
-        throw new Error(detail || "Could not create your account. Please try again.");
+      // Strict Role-Based Navigation Routing
+      if (authenticatedUser.role === "owner") {
+        router.push("/owner");
+      } else if (authenticatedUser.role === "trainer") {
+        router.push("/trainer");
+      } else {
+        router.push("/dashboard");
       }
-      const registeredUser = data.user as AuthUser;
-      setUser(registeredUser);
-      router.push("/onboarding");
+    } catch (error) {
+      console.error("Login Error:", error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to connect to backend API",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -140,24 +115,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         method: "POST",
         credentials: "include",
       });
-    } catch {
-      // Clear local UI state even if the network is unavailable.
+    } catch (err) {
+      console.error("Failed to notify backend on logout:", err);
     }
+
+    // Clean client state
     setUser(null);
     router.push("/login");
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, loginAs, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, loginAs, logout }}>
       {children}
     </AuthContext.Provider>
   );
-}
-
-function workspacePath(role: UserRole): string {
-  if (role === "owner") return "/owner";
-  if (role === "trainer") return "/trainer";
-  return "/dashboard";
 }
 
 export function useAuth() {

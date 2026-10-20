@@ -1,37 +1,25 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Lock, Mail } from "lucide-react";
-import Link from "next/link";
+import React, { useState } from "react";
+import { Lock, Mail, Shield, User, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ApertureIrisProgress } from "@/components/ui/aperture-iris";
-import { useAuth } from "@/context/auth-context";
-import { API_BASE_URL } from "@/lib/api";
+import { useAuth, UserRole } from "@/context/auth-context";
 
 export default function LoginPage() {
-  const { loginAs, isLoading } = useAuth();
+  const { loginAs } = useAuth();
+  const [selectedRole, setSelectedRole] = useState<UserRole>("member");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const reason = new URLSearchParams(window.location.search).get("error");
-    if (reason === "account_exists") {
-      setError("An account already uses this email. Sign in with that account; Google accounts are not linked automatically.");
-    } else if (reason === "google_not_configured") {
-      setError("Google sign-in is not configured yet. Use your email and password.");
-    } else if (reason === "google_signin_failed") {
-      setError("Google sign-in could not be completed. Please try again.");
-    }
-  }, []);
+  const handleRoleSelect = (role: UserRole) => {
+    setSelectedRole(role);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    void loginAs(email.trim(), password).catch((loginError: unknown) => {
-      setError(loginError instanceof Error ? loginError.message : "Unable to sign in. Please try again.");
-    });
+    void loginAs(email, password);
   };
 
   return (
@@ -48,22 +36,63 @@ export default function LoginPage() {
         <CardHeader className='text-center pb-2'>
           <CardTitle className='text-[22px]'>Sign in to Portal</CardTitle>
           <p className='text-[13px] text-[var(--color-text-secondary)] mt-1'>
-            Sign in with your account details
+            Select your account access role below
           </p>
         </CardHeader>
 
         <CardContent className='pt-4 space-y-4'>
+          {/* Role Selector Segment Tabs */}
+          <div className='grid grid-cols-3 gap-1.5 p-1 bg-[var(--color-bg-secondary)] rounded-sm border border-[var(--color-border-default)]'>
+            <button
+              type='button'
+              onClick={() => handleRoleSelect("member")}
+              className={`py-2 px-1 rounded-sm text-[12px] font-mono transition-colors flex flex-col items-center gap-1 cursor-pointer ${
+                selectedRole === "member"
+                  ? "bg-[var(--color-surface-elevated)] border border-[var(--color-accent-primary)] text-[var(--color-accent-primary)] font-semibold"
+                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+              }`}
+            >
+              <User className='h-3.5 w-3.5' />
+              <span>Member</span>
+            </button>
+
+            <button
+              type='button'
+              onClick={() => handleRoleSelect("trainer")}
+              className={`py-2 px-1 rounded-sm text-[12px] font-mono transition-colors flex flex-col items-center gap-1 cursor-pointer ${
+                selectedRole === "trainer"
+                  ? "bg-[var(--color-surface-elevated)] border border-[var(--color-accent-primary)] text-[var(--color-accent-primary)] font-semibold"
+                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+              }`}
+            >
+              <Shield className='h-3.5 w-3.5' />
+              <span>Trainer</span>
+            </button>
+
+            <button
+              type='button'
+              onClick={() => handleRoleSelect("owner")}
+              className={`py-2 px-1 rounded-sm text-[12px] font-mono transition-colors flex flex-col items-center gap-1 cursor-pointer ${
+                selectedRole === "owner"
+                  ? "bg-[var(--color-surface-elevated)] border border-[var(--color-accent-primary)] text-[var(--color-accent-primary)] font-semibold"
+                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+              }`}
+            >
+              <Building2 className='h-3.5 w-3.5' />
+              <span>Owner</span>
+            </button>
+          </div>
+
           <form onSubmit={handleSubmit} className='space-y-4 pt-1'>
             {/* Email Field */}
             <div className='space-y-1.5'>
               <label className='text-[12px] font-mono uppercase text-[var(--color-text-secondary)]'>
-                Email address
+                {selectedRole.toUpperCase()} Portal ID
               </label>
               <div className='relative'>
                 <Mail className='h-4 w-4 absolute left-3 top-3 text-[var(--color-text-muted)]' />
                 <input
                   type='email'
-                  autoComplete='username'
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -81,7 +110,6 @@ export default function LoginPage() {
                 <Lock className='h-4 w-4 absolute left-3 top-3 text-[var(--color-text-muted)]' />
                 <input
                   type='password'
-                  autoComplete='current-password'
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -90,26 +118,14 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {error && <p role='alert' className='rounded-sm border border-[var(--color-error)]/30 bg-[var(--color-error)]/10 px-3 py-2 text-[13px] text-[var(--color-error)]'>{error}</p>}
-
             <Button
               type='submit'
               size='logger'
-              disabled={isLoading}
               className='w-full mt-2 text-[15px]'
             >
-              {isLoading ? "Signing in…" : "Sign in"}
+              Log In as {selectedRole.toUpperCase()}
             </Button>
           </form>
-          <a
-            href={`${API_BASE_URL}/api/auth/google`}
-            className='flex w-full items-center justify-center rounded-sm border border-[var(--color-border-default)] px-4 py-2.5 text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-bg-secondary)]'
-          >
-            Continue with Google
-          </a>
-          <p className='text-center text-[13px] text-[var(--color-text-secondary)]'>
-            Need an account? <Link className='text-[var(--color-accent-primary)] hover:underline' href='/register'>Create one</Link>
-          </p>
         </CardContent>
       </Card>
     </div>
